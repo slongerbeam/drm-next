@@ -511,12 +511,35 @@ static void ipu_di_config_clock(struct ipu_di *di,
 		clk_get_rate(di->clk_di_pixel) / (clkgen0 >> 4));
 }
 
+/*
+ * This function is called to adapt synchronous LCD panel to
+ * IPU restriction.
+ */
+static void adapt_panel_to_ipu_restricitions(struct ipu_di *di,
+					     struct ipu_di_signal_cfg *sig)
+{
+	if (sig->v_end_width < 2) {
+		uint16_t diff = 2 - sig->v_end_width;
+
+		if (sig->v_start_width >= diff) {
+			sig->v_end_width = 2;
+			sig->v_start_width -= diff;
+		} else if (sig->v_sync_width > diff) {
+			sig->v_end_width = 2;
+			sig->v_sync_width = sig->v_sync_width - diff;
+		} else
+			dev_warn(di->ipu->dev, "failed to adapt timing\n");
+
+		dev_warn(di->ipu->dev,
+			 "timing adapted due to IPU restrictions\n");
+	}
+}
+
 int ipu_di_init_sync_panel(struct ipu_di *di, struct ipu_di_signal_cfg *sig)
 {
 	u32 reg;
 	u32 di_gen, vsync_cnt;
 	u32 div;
-	u32 h_total, v_total;
 
 	dev_dbg(di->ipu->dev, "disp %d: panel size = %d x %d\n",
 		di->id, sig->width, sig->height);
@@ -524,10 +547,7 @@ int ipu_di_init_sync_panel(struct ipu_di *di, struct ipu_di_signal_cfg *sig)
 	if ((sig->v_sync_width == 0) || (sig->h_sync_width == 0))
 		return -EINVAL;
 
-	h_total = sig->width + sig->h_sync_width + sig->h_start_width +
-		sig->h_end_width;
-	v_total = sig->height + sig->v_sync_width + sig->v_start_width +
-		sig->v_end_width;
+	adapt_panel_to_ipu_restricitions(di, sig);
 
 	dev_dbg(di->ipu->dev, "Clocks: IPU %luHz DI %luHz Needed %luHz\n",
 		clk_get_rate(di->clk_ipu),
