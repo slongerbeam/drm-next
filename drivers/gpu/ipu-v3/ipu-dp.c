@@ -84,6 +84,22 @@ static inline struct ipu_flow *to_flow(struct ipu_dp *dp)
 		return container_of(dp, struct ipu_flow, background);
 }
 
+static const int rgb2yuv_coeff[5][3] = {
+	{ 0x0099, 0x012d, 0x003a },
+	{ 0x03a9, 0x0356, 0x0100 },
+	{ 0x0100, 0x0329, 0x03d6 },
+	{ 0x0000, 0x0200, 0x0200 }, /* B0, B1, B2 */
+	{ 0x2,    0x2,    0x2 },    /* S0, S1, S2 */
+};
+
+static const int yuv2rgb_coeff[5][3] = {
+	{ 0x0095, 0x0000, 0x00cc },
+	{ 0x0095, 0x03ce, 0x0398 },
+	{ 0x0095, 0x00ff, 0x0000 },
+	{ 0x3e42, 0x010a, 0x3dd6 }, /* B0,B1,B2 */
+	{ 0x1,    0x1,    0x1 },    /* S0,S1,S2 */
+};
+
 int ipu_dp_set_global_alpha(struct ipu_dp *dp, bool enable,
 		u8 alpha, bool bg_chan)
 {
@@ -138,6 +154,7 @@ static void ipu_dp_csc_init(struct ipu_flow *flow,
 		enum ipu_color_space out,
 		u32 place)
 {
+	const int (*c)[3];
 	u32 reg;
 
 	reg = readl(flow->base + DP_COM_CONF);
@@ -148,25 +165,19 @@ static void ipu_dp_csc_init(struct ipu_flow *flow,
 		return;
 	}
 
-	if (in == IPUV3_COLORSPACE_RGB && out == IPUV3_COLORSPACE_YUV) {
-		writel(0x099 | (0x12d << 16), flow->base + DP_CSC_A_0);
-		writel(0x03a | (0x3a9 << 16), flow->base + DP_CSC_A_1);
-		writel(0x356 | (0x100 << 16), flow->base + DP_CSC_A_2);
-		writel(0x100 | (0x329 << 16), flow->base + DP_CSC_A_3);
-		writel(0x3d6 | (0x0000 << 16) | (2 << 30),
-				flow->base + DP_CSC_0);
-		writel(0x200 | (2 << 14) | (0x200 << 16) | (2 << 30),
-				flow->base + DP_CSC_1);
-	} else {
-		writel(0x095 | (0x000 << 16), flow->base + DP_CSC_A_0);
-		writel(0x0cc | (0x095 << 16), flow->base + DP_CSC_A_1);
-		writel(0x3ce | (0x398 << 16), flow->base + DP_CSC_A_2);
-		writel(0x095 | (0x0ff << 16), flow->base + DP_CSC_A_3);
-		writel(0x000 | (0x3e42 << 16) | (1 << 30),
-				flow->base + DP_CSC_0);
-		writel(0x10a | (1 << 14) | (0x3dd6 << 16) | (1 << 30),
-				flow->base + DP_CSC_1);
-	}
+	if (in == IPUV3_COLORSPACE_RGB && out == IPUV3_COLORSPACE_YUV)
+		c = rgb2yuv_coeff;
+	else
+		c = yuv2rgb_coeff;
+
+	writel(c[0][0] | (c[0][1] << 16), flow->base + DP_CSC_A_0);
+	writel(c[0][2] | (c[1][0] << 16), flow->base + DP_CSC_A_1);
+	writel(c[1][1] | (c[1][2] << 16), flow->base + DP_CSC_A_2);
+	writel(c[2][0] | (c[2][1] << 16), flow->base + DP_CSC_A_3);
+	writel(c[2][2] | (c[3][0] << 16) | (c[4][0] << 30),
+	       flow->base + DP_CSC_0);
+	writel(c[3][1] | (c[4][1] << 14) | (c[3][2] << 16) | (c[4][2] << 30),
+	       flow->base + DP_CSC_1);
 
 	reg |= place;
 
