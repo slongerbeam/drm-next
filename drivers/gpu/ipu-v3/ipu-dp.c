@@ -29,6 +29,8 @@
 #define DP_COM_CONF		0x0
 #define DP_GRAPH_WIND_CTRL	0x0004
 #define DP_FG_POS		0x0008
+#define DP_GAMMA_C(i)		(0x0014 + ((i) / 2) * 4)
+#define DP_GAMMA_S(i)		(0x0034 + ((i) / 4) * 4)
 #define DP_CSC_A_0		0x0044
 #define DP_CSC_A_1		0x0048
 #define DP_CSC_A_2		0x004C
@@ -45,6 +47,8 @@
 #define DP_COM_CONF_CSC_DEF_FG		(3 << 8)
 #define DP_COM_CONF_CSC_DEF_BG		(2 << 8)
 #define DP_COM_CONF_CSC_DEF_BOTH	(1 << 8)
+#define DP_COM_CONF_GAMMA_EN		(1 << 12)
+#define DP_COM_CONF_GAMMA_YUV_EN	(1 << 13)
 
 #define IPUV3_NUM_FLOWS		3
 
@@ -207,6 +211,48 @@ int ipu_dp_set_color_key(struct ipu_dp *dp, bool enable, u32 color_key)
 	return 0;
 }
 EXPORT_SYMBOL(ipu_dp_set_color_key);
+
+/*
+ * Programs a piecewise linear curve that approximates the gamma curve.
+ * Sixteen lines in the curve must be provided, that is, m[] and b[]
+ * must each have sixteen entries, where m[] and b[] contain the slope
+ * and y-intercept of each line respectively.
+ */
+int ipu_dp_set_gamma_correction(struct ipu_dp *dp, bool enable, u32 *m, u32 *b)
+{
+	struct ipu_flow *flow = to_flow(dp);
+	struct ipu_dp_priv *priv = flow->priv;
+	u32 reg;
+	int i;
+
+	mutex_lock(&priv->mutex);
+
+	for (i = 0; i < 16; i += 2)
+		writel((b[i] & 0x1ff) | ((b[i + 1] & 0x1ff) << 16),
+		       flow->base + DP_GAMMA_C(i));
+	for (i = 0; i < 16; i += 4)
+		writel((m[i] & 0xff) | ((m[i + 1] & 0xff) << 8) |
+		       ((m[i + 2] & 0xff) << 16) | ((m[i + 3] & 0xff) << 24),
+		       flow->base + DP_GAMMA_S(i));
+
+	reg = readl(flow->base + DP_COM_CONF);
+	if (enable) {
+		if (flow->out_cs == IPUV3_COLORSPACE_YUV)
+			reg |= DP_COM_CONF_GAMMA_YUV_EN;
+		else
+			reg &= ~DP_COM_CONF_GAMMA_YUV_EN;
+		reg |= DP_COM_CONF_GAMMA_EN;
+	} else
+		reg &= ~DP_COM_CONF_GAMMA_EN;
+	writel(reg, flow->base + DP_COM_CONF);
+
+	ipu_srm_dp_sync_update(priv->ipu);
+
+	mutex_unlock(&priv->mutex);
+
+	return 0;
+}
+EXPORT_SYMBOL(ipu_dp_set_gamma_correction);
 
 int ipu_dp_set_window_pos(struct ipu_dp *dp, u16 x_pos, u16 y_pos)
 {
