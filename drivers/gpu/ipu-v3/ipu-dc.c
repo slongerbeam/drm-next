@@ -327,6 +327,20 @@ int ipu_dc_init_sync(struct ipu_dc *dc, struct ipu_di *di, bool interlaced,
 }
 EXPORT_SYMBOL_GPL(ipu_dc_init_sync);
 
+void ipu_dc_uninit_sync(struct ipu_dc *dc)
+{
+	dc_link_event(dc, DC_EVT_NL, 0, 0);
+	dc_link_event(dc, DC_EVT_EOL, 0, 0);
+	dc_link_event(dc, DC_EVT_NEW_DATA, 0, 0);
+	dc_link_event(dc, DC_EVT_NF, 0, 0);
+	dc_link_event(dc, DC_EVT_NFIELD, 0, 0);
+	dc_link_event(dc, DC_EVT_EOF, 0, 0);
+	dc_link_event(dc, DC_EVT_EOFIELD, 0, 0);
+	dc_link_event(dc, DC_EVT_NEW_CHAN, 0, 0);
+	dc_link_event(dc, DC_EVT_NEW_ADDR, 0, 0);
+}
+EXPORT_SYMBOL_GPL(ipu_dc_uninit_sync);
+
 void ipu_dc_enable(struct ipu_soc *ipu)
 {
 	ipu_module_enable(ipu, IPU_CONF_DC_EN);
