@@ -302,6 +302,16 @@ static void ipu_dp_csc_init(struct ipu_flow *flow,
 	writel(reg, flow->base + DP_COM_CONF);
 }
 
+static void ipu_dp_csc_disable(struct ipu_flow *flow)
+{
+	writel(0, flow->base + DP_CSC_A_0);
+	writel(0, flow->base + DP_CSC_A_1);
+	writel(0, flow->base + DP_CSC_A_2);
+	writel(0, flow->base + DP_CSC_A_3);
+	writel(0, flow->base + DP_CSC_0);
+	writel(0, flow->base + DP_CSC_1);
+}
+
 int ipu_dp_setup_channel(struct ipu_dp *dp,
 		enum ipu_color_space in,
 		enum ipu_color_space out)
@@ -343,6 +353,14 @@ int ipu_dp_setup_channel(struct ipu_dp *dp,
 	return 0;
 }
 EXPORT_SYMBOL_GPL(ipu_dp_setup_channel);
+
+void ipu_dp_uninit_channel(struct ipu_dp *dp)
+{
+	struct ipu_flow *flow = to_flow(dp);
+
+	ipu_dp_csc_disable(flow);
+}
+EXPORT_SYMBOL_GPL(ipu_dp_uninit_channel);
 
 int ipu_dp_enable(struct ipu_soc *ipu)
 {
