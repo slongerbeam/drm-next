@@ -144,6 +144,7 @@ struct ipu_dc_priv {
 	struct completion	comp;
 	int			dc_irq;
 	int			dp_irq;
+	int			use_count;
 };
 
 /* forward references */
@@ -345,7 +346,14 @@ void ipu_dc_enable(struct ipu_dc *dc)
 {
 	struct ipu_dc_priv *priv = dc->priv;
 
-	ipu_module_enable(priv->ipu, IPU_CONF_DC_EN);
+	mutex_lock(&priv->mutex);
+
+	if (!priv->use_count)
+		ipu_module_enable(priv->ipu, IPU_CONF_DC_EN);
+
+	priv->use_count++;
+
+	mutex_unlock(&priv->mutex);
 }
 EXPORT_SYMBOL_GPL(ipu_dc_enable);
 
@@ -409,7 +417,16 @@ void ipu_dc_disable(struct ipu_dc *dc)
 {
 	struct ipu_dc_priv *priv = dc->priv;
 
-	ipu_module_disable(priv->ipu, IPU_CONF_DC_EN);
+	mutex_lock(&priv->mutex);
+
+	priv->use_count--;
+	if (!priv->use_count)
+		ipu_module_disable(priv->ipu, IPU_CONF_DC_EN);
+
+	if (priv->use_count < 0)
+		priv->use_count = 0;
+
+	mutex_unlock(&priv->mutex);
 }
 EXPORT_SYMBOL_GPL(ipu_dc_disable);
 
