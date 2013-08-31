@@ -260,6 +260,7 @@ int ipu_di_disable(struct ipu_di *);
 int ipu_di_enable(struct ipu_di *);
 int ipu_di_get_num(struct ipu_di *);
 int ipu_di_init_sync_panel(struct ipu_di *, struct ipu_di_signal_cfg *sig);
+void ipu_di_uninit_sync_panel(struct ipu_di *di);
 
 /*
  * IPU Display Multi FIFO Controller (dmfc) functions

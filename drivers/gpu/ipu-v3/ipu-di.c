@@ -639,6 +639,24 @@ int ipu_di_init_sync_panel(struct ipu_di *di, struct ipu_di_signal_cfg *sig)
 }
 EXPORT_SYMBOL_GPL(ipu_di_init_sync_panel);
 
+void ipu_di_uninit_sync_panel(struct ipu_di *di)
+{
+	u32 reg, di_gen;
+
+	mutex_lock(&di_mutex);
+
+	di_gen = ipu_di_read(di, DI_GENERAL);
+	di_gen |= 0x3ff | DI_GEN_POLARITY_DISP_CLK;
+	ipu_di_write(di, di_gen, DI_GENERAL);
+
+	reg = ipu_di_read(di, DI_POL);
+	reg |= 0x3ffffff;
+	ipu_di_write(di, reg, DI_POL);
+
+	mutex_unlock(&di_mutex);
+}
+EXPORT_SYMBOL(ipu_di_uninit_sync_panel);
+
 int ipu_di_enable(struct ipu_di *di)
 {
 	int ret;
