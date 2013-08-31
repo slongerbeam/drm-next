@@ -68,6 +68,7 @@ static void ipu_fb_enable(struct ipu_crtc *ipu_crtc)
 	/* Start DC channel and DI after IDMAC */
 	ipu_dc_enable_channel(ipu_crtc->dc);
 	ipu_di_enable(ipu_crtc->di);
+	ipu_di_enable_clock(ipu_crtc->di);
 
 	ipu_crtc->enabled = 1;
 }
@@ -82,6 +83,7 @@ static void ipu_fb_disable(struct ipu_crtc *ipu_crtc)
 	ipu_di_disable(ipu_crtc->di);
 	ipu_plane_disable(ipu_crtc->plane[0]);
 	ipu_dc_disable(ipu_crtc->dc);
+	ipu_di_disable_clock(ipu_crtc->di);
 
 	ipu_crtc->enabled = 0;
 }

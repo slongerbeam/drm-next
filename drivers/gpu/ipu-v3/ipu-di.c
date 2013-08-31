@@ -659,13 +659,7 @@ EXPORT_SYMBOL(ipu_di_uninit_sync_panel);
 
 int ipu_di_enable(struct ipu_di *di)
 {
-	int ret;
-
 	WARN_ON(IS_ERR(di->clk_di_pixel));
-
-	ret = clk_prepare_enable(di->clk_di_pixel);
-	if (ret)
-		return ret;
 
 	dev_dbg(di->ipu->dev, "DI%d enable\n", di->id);
 	ipu_module_enable(di->ipu, di->module);
@@ -674,6 +668,12 @@ int ipu_di_enable(struct ipu_di *di)
 }
 EXPORT_SYMBOL_GPL(ipu_di_enable);
 
+int ipu_di_enable_clock(struct ipu_di *di)
+{
+	return clk_prepare_enable(di->clk_di_pixel);
+}
+EXPORT_SYMBOL_GPL(ipu_di_enable_clock);
+
 int ipu_di_disable(struct ipu_di *di)
 {
 	WARN_ON(IS_ERR(di->clk_di_pixel));
@@ -681,11 +681,17 @@ int ipu_di_disable(struct ipu_di *di)
 	dev_dbg(di->ipu->dev, "DI%d disable\n", di->id);
 	ipu_module_disable(di->ipu, di->module);
 
+	return 0;
+}
+EXPORT_SYMBOL_GPL(ipu_di_disable);
+
+int ipu_di_disable_clock(struct ipu_di *di)
+{
 	clk_disable_unprepare(di->clk_di_pixel);
 
 	return 0;
 }
-EXPORT_SYMBOL_GPL(ipu_di_disable);
+EXPORT_SYMBOL_GPL(ipu_di_disable_clock);
 
 int ipu_di_get_num(struct ipu_di *di)
 {
