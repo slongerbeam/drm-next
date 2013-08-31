@@ -649,6 +649,7 @@ int ipu_di_enable(struct ipu_di *di)
 	if (ret)
 		return ret;
 
+	dev_dbg(di->ipu->dev, "DI%d enable\n", di->id);
 	ipu_module_enable(di->ipu, di->module);
 
 	return 0;
@@ -659,6 +660,7 @@ int ipu_di_disable(struct ipu_di *di)
 {
 	WARN_ON(IS_ERR(di->clk_di_pixel));
 
+	dev_dbg(di->ipu->dev, "DI%d disable\n", di->id);
 	ipu_module_disable(di->ipu, di->module);
 
 	clk_disable_unprepare(di->clk_di_pixel);

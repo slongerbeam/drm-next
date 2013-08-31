@@ -127,8 +127,10 @@ int ipu_dmfc_enable_channel(struct dmfc_channel *dmfc)
 	struct ipu_dmfc_priv *priv = dmfc->priv;
 	mutex_lock(&priv->mutex);
 
-	if (!priv->use_count)
+	if (!priv->use_count) {
+		dev_dbg(priv->dev, "DMFC enable\n");
 		ipu_module_enable(priv->ipu, IPU_CONF_DMFC_EN);
+	}
 
 	priv->use_count++;
 
@@ -162,6 +164,7 @@ void ipu_dmfc_disable_channel(struct dmfc_channel *dmfc)
 
 	if (!priv->use_count) {
 		ipu_dmfc_wait_fifos(priv);
+		dev_dbg(priv->dev, "DMFC disable\n");
 		ipu_module_disable(priv->ipu, IPU_CONF_DMFC_EN);
 	}
 

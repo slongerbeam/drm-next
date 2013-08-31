@@ -348,8 +348,10 @@ void ipu_dc_enable(struct ipu_dc *dc)
 
 	mutex_lock(&priv->mutex);
 
-	if (!priv->use_count)
+	if (!priv->use_count) {
+		dev_dbg(priv->dev, "DC enable\n");
 		ipu_module_enable(priv->ipu, IPU_CONF_DC_EN);
+	}
 
 	priv->use_count++;
 
@@ -420,8 +422,10 @@ void ipu_dc_disable(struct ipu_dc *dc)
 	mutex_lock(&priv->mutex);
 
 	priv->use_count--;
-	if (!priv->use_count)
+	if (!priv->use_count) {
+		dev_dbg(priv->dev, "DC disable\n");
 		ipu_module_disable(priv->ipu, IPU_CONF_DC_EN);
+	}
 
 	if (priv->use_count < 0)
 		priv->use_count = 0;
