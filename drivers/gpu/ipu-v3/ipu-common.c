@@ -54,6 +54,25 @@ void ipu_srm_dp_sync_update(struct ipu_soc *ipu)
 }
 EXPORT_SYMBOL_GPL(ipu_srm_dp_sync_update);
 
+void ipu_enable_di_counter(struct ipu_soc *ipu, int di, bool enable)
+{
+	unsigned long flags;
+	u32 val, mask;
+
+	mask = di ? IPU_DI1_COUNTER_RELEASE : IPU_DI0_COUNTER_RELEASE;
+
+	spin_lock_irqsave(&ipu->lock, flags);
+
+	val = ipu_cm_read(ipu, IPU_DISP_GEN);
+	if (enable)
+		val |= mask;
+	else
+		val &= ~mask;
+	ipu_cm_write(ipu, val, IPU_DISP_GEN);
+
+	spin_unlock_irqrestore(&ipu->lock, flags);
+}
+
 enum ipu_color_space ipu_drm_fourcc_to_colorspace(u32 drm_fourcc)
 {
 	switch (drm_fourcc) {
@@ -402,15 +421,6 @@ int ipu_module_enable(struct ipu_soc *ipu, u32 mask)
 
 	spin_lock_irqsave(&ipu->lock, lock_flags);
 
-	val = ipu_cm_read(ipu, IPU_DISP_GEN);
-
-	if (mask & IPU_CONF_DI0_EN)
-		val |= IPU_DI0_COUNTER_RELEASE;
-	if (mask & IPU_CONF_DI1_EN)
-		val |= IPU_DI1_COUNTER_RELEASE;
-
-	ipu_cm_write(ipu, val, IPU_DISP_GEN);
-
 	val = ipu_cm_read(ipu, IPU_CONF);
 	val |= mask;
 	ipu_cm_write(ipu, val, IPU_CONF);
@@ -431,15 +441,6 @@ int ipu_module_disable(struct ipu_soc *ipu, u32 mask)
 	val = ipu_cm_read(ipu, IPU_CONF);
 	val &= ~mask;
 	ipu_cm_write(ipu, val, IPU_CONF);
-
-	val = ipu_cm_read(ipu, IPU_DISP_GEN);
-
-	if (mask & IPU_CONF_DI0_EN)
-		val &= ~IPU_DI0_COUNTER_RELEASE;
-	if (mask & IPU_CONF_DI1_EN)
-		val &= ~IPU_DI1_COUNTER_RELEASE;
-
-	ipu_cm_write(ipu, val, IPU_DISP_GEN);
 
 	spin_unlock_irqrestore(&ipu->lock, lock_flags);
 

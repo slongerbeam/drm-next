@@ -184,6 +184,7 @@ static inline void ipu_idmac_write(struct ipu_soc *ipu, u32 value,
 }
 
 void ipu_srm_dp_sync_update(struct ipu_soc *ipu);
+void ipu_enable_di_counter(struct ipu_soc *ipu, int di, bool enable);
 
 int ipu_module_enable(struct ipu_soc *ipu, u32 mask);
 int ipu_module_disable(struct ipu_soc *ipu, u32 mask);
