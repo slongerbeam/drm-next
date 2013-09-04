@@ -670,7 +670,16 @@ EXPORT_SYMBOL_GPL(ipu_di_enable);
 
 int ipu_di_enable_clock(struct ipu_di *di)
 {
-	return clk_prepare_enable(di->clk_di_pixel);
+	int ret;
+
+	ret = clk_prepare_enable(di->clk_di_pixel);
+	if (ret)
+		return ret;
+
+	ipu_enable_di_counter(di->ipu, di->id, true);
+
+	return 0;
+
 }
 EXPORT_SYMBOL_GPL(ipu_di_enable_clock);
 
@@ -687,6 +696,8 @@ EXPORT_SYMBOL_GPL(ipu_di_disable);
 
 int ipu_di_disable_clock(struct ipu_di *di)
 {
+	ipu_enable_di_counter(di->ipu, di->id, false);
+
 	clk_disable_unprepare(di->clk_di_pixel);
 
 	return 0;
