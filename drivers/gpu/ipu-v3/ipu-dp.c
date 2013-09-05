@@ -388,14 +388,13 @@ int ipu_dp_enable_channel(struct ipu_dp *dp)
 	struct ipu_dp_priv *priv = flow->priv;
 	u32 reg;
 
-	if (!dp->foreground)
-		return 0;
-
 	mutex_lock(&priv->mutex);
 
-	reg = readl(flow->base + DP_COM_CONF);
-	reg |= DP_COM_CONF_FG_EN;
-	writel(reg, flow->base + DP_COM_CONF);
+	if (dp->foreground) {
+		reg = readl(flow->base + DP_COM_CONF);
+		reg |= DP_COM_CONF_FG_EN;
+		writel(reg, flow->base + DP_COM_CONF);
+	}
 
 	ipu_srm_dp_sync_update(priv->ipu);
 
