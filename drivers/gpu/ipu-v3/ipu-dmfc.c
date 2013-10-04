@@ -125,6 +125,7 @@ struct ipu_dmfc_priv {
 int ipu_dmfc_enable_channel(struct dmfc_channel *dmfc)
 {
 	struct ipu_dmfc_priv *priv = dmfc->priv;
+
 	mutex_lock(&priv->mutex);
 
 	if (!priv->use_count) {
@@ -176,14 +177,14 @@ void ipu_dmfc_disable_channel(struct dmfc_channel *dmfc)
 EXPORT_SYMBOL_GPL(ipu_dmfc_disable_channel);
 
 static int ipu_dmfc_setup_channel(struct dmfc_channel *dmfc, int slots,
-		int segment, int burstsize)
+				  int segment, int burstsize)
 {
 	struct ipu_dmfc_priv *priv = dmfc->priv;
 	u32 val, field;
 
 	dev_dbg(priv->dev,
-			"dmfc: using %d slots starting from segment %d for IPU channel %d\n",
-			slots, segment, dmfc->data->ipu_channel);
+		"dmfc: using %d slots starting from segment %d for IPU channel %d\n",
+		slots, segment, dmfc->data->ipu_channel);
 
 	switch (slots) {
 	case 1:
@@ -235,7 +236,7 @@ static int ipu_dmfc_setup_channel(struct dmfc_channel *dmfc, int slots,
 }
 
 static int dmfc_bandwidth_to_slots(struct ipu_dmfc_priv *priv,
-		unsigned long bandwidth)
+				   unsigned long bandwidth)
 {
 	int slots = 1;
 
@@ -272,7 +273,7 @@ void ipu_dmfc_free_bandwidth(struct dmfc_channel *dmfc)
 	int i;
 
 	dev_dbg(priv->dev, "dmfc: freeing %d slots starting from segment %d\n",
-			dmfc->slots, dmfc->segment);
+		dmfc->slots, dmfc->segment);
 
 	mutex_lock(&priv->mutex);
 
@@ -299,9 +300,9 @@ void ipu_dmfc_free_bandwidth(struct dmfc_channel *dmfc)
 	for (i = 0; i < DMFC_NUM_CHANNELS; i++) {
 		if (priv->channels[i].slots > 0)
 			ipu_dmfc_setup_channel(&priv->channels[i],
-					priv->channels[i].slots,
-					priv->channels[i].segment,
-					priv->channels[i].burstsize);
+					       priv->channels[i].slots,
+					       priv->channels[i].segment,
+					       priv->channels[i].burstsize);
 	}
 out:
 	mutex_unlock(&priv->mutex);
@@ -309,15 +310,16 @@ out:
 EXPORT_SYMBOL_GPL(ipu_dmfc_free_bandwidth);
 
 int ipu_dmfc_alloc_bandwidth(struct dmfc_channel *dmfc,
-		unsigned long bandwidth_pixel_per_second, int burstsize)
+			     unsigned long bandwidth_pixel_per_second,
+			     int burstsize)
 {
 	struct ipu_dmfc_priv *priv = dmfc->priv;
 	int slots = dmfc_bandwidth_to_slots(priv, bandwidth_pixel_per_second);
 	int segment = -1, ret = 0;
 
-	dev_dbg(priv->dev, "dmfc: trying to allocate %ldMpixel/s for IPU channel %d\n",
-			bandwidth_pixel_per_second / 1000000,
-			dmfc->data->ipu_channel);
+	dev_dbg(priv->dev,
+		"dmfc: trying to allocate %ldMpixel/s for IPU channel %d\n",
+		bandwidth_pixel_per_second / 1000000, dmfc->data->ipu_channel);
 
 	ipu_dmfc_free_bandwidth(dmfc);
 
@@ -390,7 +392,7 @@ void ipu_dmfc_put(struct dmfc_channel *dmfc)
 EXPORT_SYMBOL_GPL(ipu_dmfc_put);
 
 int ipu_dmfc_init(struct ipu_soc *ipu, struct device *dev, unsigned long base,
-		struct clk *ipu_clk)
+		  struct clk *ipu_clk)
 {
 	struct ipu_dmfc_priv *priv;
 	int i;
@@ -425,7 +427,7 @@ int ipu_dmfc_init(struct ipu_soc *ipu, struct device *dev, unsigned long base,
 	priv->bandwidth_per_slot = clk_get_rate(ipu_clk) * 4 / 8;
 
 	dev_dbg(dev, "dmfc: 8 slots with %ldMpixel/s bandwidth each\n",
-			priv->bandwidth_per_slot / 1000000);
+		priv->bandwidth_per_slot / 1000000);
 
 	writel(0x202020f6, priv->base + DMFC_WR_CHAN_DEF);
 	writel(0x2020f6f6, priv->base + DMFC_DP_CHAN_DEF);
