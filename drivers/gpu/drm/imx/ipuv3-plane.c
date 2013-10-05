@@ -158,15 +158,9 @@ int ipu_plane_mode_set(struct ipu_plane *ipu_plane, struct drm_crtc *crtc,
 		break;
 	}
 
-	ret = ipu_dmfc_init_channel(ipu_plane->dmfc, crtc_w);
-	if (ret) {
-		dev_err(dev, "initializing dmfc channel failed with %d\n", ret);
-		return ret;
-	}
-
 	ret = ipu_dmfc_alloc_bandwidth(ipu_plane->dmfc,
 			calc_bandwidth(crtc_w, crtc_h,
-				       calc_vref(mode)), 64);
+				       calc_vref(mode)), crtc_w, 64);
 	if (ret) {
 		dev_err(dev, "allocating dmfc bandwidth failed with %d\n", ret);
 		return ret;
