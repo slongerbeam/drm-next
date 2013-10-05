@@ -176,6 +176,21 @@ void ipu_dmfc_disable_channel(struct dmfc_channel *dmfc)
 }
 EXPORT_SYMBOL_GPL(ipu_dmfc_disable_channel);
 
+static void dmfc_set_wait_eot(struct dmfc_channel *dmfc, int width)
+{
+	struct ipu_dmfc_priv *priv = dmfc->priv;
+	u32 dmfc_gen1;
+
+	dmfc_gen1 = readl(priv->base + DMFC_GENERAL1);
+
+	if ((dmfc->slots * 64 * 4) / width > dmfc->data->max_fifo_lines)
+		dmfc_gen1 |= 1 << dmfc->data->eot_shift;
+	else
+		dmfc_gen1 &= ~(1 << dmfc->data->eot_shift);
+
+	writel(dmfc_gen1, priv->base + DMFC_GENERAL1);
+}
+
 static int ipu_dmfc_setup_channel(struct dmfc_channel *dmfc, int slots,
 				  int segment, int burstsize)
 {
@@ -312,7 +327,7 @@ EXPORT_SYMBOL_GPL(ipu_dmfc_free_bandwidth);
 
 int ipu_dmfc_alloc_bandwidth(struct dmfc_channel *dmfc,
 			     unsigned long bandwidth_pixel_per_second,
-			     int burstsize)
+			     int width, int burstsize)
 {
 	struct ipu_dmfc_priv *priv = dmfc->priv;
 	int slots = dmfc_bandwidth_to_slots(priv, bandwidth_pixel_per_second);
@@ -347,7 +362,11 @@ int ipu_dmfc_alloc_bandwidth(struct dmfc_channel *dmfc,
 		goto out;
 	}
 
-	ipu_dmfc_setup_channel(dmfc, slots, segment, burstsize);
+	ret = ipu_dmfc_setup_channel(dmfc, slots, segment, burstsize);
+	if (ret)
+		goto out;
+
+	dmfc_set_wait_eot(dmfc, width);
 
 out:
 	mutex_unlock(&priv->mutex);
@@ -355,24 +374,6 @@ out:
 	return ret;
 }
 EXPORT_SYMBOL_GPL(ipu_dmfc_alloc_bandwidth);
-
-int ipu_dmfc_init_channel(struct dmfc_channel *dmfc, int width)
-{
-	struct ipu_dmfc_priv *priv = dmfc->priv;
-	u32 dmfc_gen1;
-
-	dmfc_gen1 = readl(priv->base + DMFC_GENERAL1);
-
-	if ((dmfc->slots * 64 * 4) / width > dmfc->data->max_fifo_lines)
-		dmfc_gen1 |= 1 << dmfc->data->eot_shift;
-	else
-		dmfc_gen1 &= ~(1 << dmfc->data->eot_shift);
-
-	writel(dmfc_gen1, priv->base + DMFC_GENERAL1);
-
-	return 0;
-}
-EXPORT_SYMBOL_GPL(ipu_dmfc_init_channel);
 
 struct dmfc_channel *ipu_dmfc_get(struct ipu_soc *ipu, int ipu_channel)
 {
