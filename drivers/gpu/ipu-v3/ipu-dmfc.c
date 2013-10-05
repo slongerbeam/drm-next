@@ -203,6 +203,7 @@ static int ipu_dmfc_setup_channel(struct dmfc_channel *dmfc, int slots,
 	case 16:
 		field |= DMFC_BURSTSIZE_16;
 		break;
+	case 20:
 	case 32:
 		field |= DMFC_BURSTSIZE_32;
 		break;
