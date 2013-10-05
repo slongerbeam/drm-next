@@ -279,7 +279,7 @@ static int dmfc_find_slots(struct ipu_dmfc_priv *priv, int slots)
 	return -EBUSY;
 }
 
-void ipu_dmfc_free_bandwidth(struct dmfc_channel *dmfc)
+static void dmfc_free_bandwidth(struct dmfc_channel *dmfc)
 {
 	struct ipu_dmfc_priv *priv = dmfc->priv;
 	int i;
@@ -287,10 +287,8 @@ void ipu_dmfc_free_bandwidth(struct dmfc_channel *dmfc)
 	dev_dbg(priv->dev, "dmfc: freeing %d slots starting from segment %d\n",
 			dmfc->slots, dmfc->segment);
 
-	mutex_lock(&priv->mutex);
-
 	if (!dmfc->slots)
-		goto out;
+		return;
 
 	dmfc->slotmask = 0;
 	dmfc->slots = 0;
@@ -316,7 +314,14 @@ void ipu_dmfc_free_bandwidth(struct dmfc_channel *dmfc)
 					priv->channels[i].segment,
 					priv->channels[i].burstsize);
 	}
-out:
+}
+
+void ipu_dmfc_free_bandwidth(struct dmfc_channel *dmfc)
+{
+	struct ipu_dmfc_priv *priv = dmfc->priv;
+
+	mutex_lock(&priv->mutex);
+	dmfc_free_bandwidth(dmfc);
 	mutex_unlock(&priv->mutex);
 }
 EXPORT_SYMBOL_GPL(ipu_dmfc_free_bandwidth);
@@ -333,9 +338,9 @@ int ipu_dmfc_alloc_bandwidth(struct dmfc_channel *dmfc,
 			bandwidth_pixel_per_second / 1000000,
 			dmfc->data->ipu_channel);
 
-	ipu_dmfc_free_bandwidth(dmfc);
-
 	mutex_lock(&priv->mutex);
+
+	dmfc_free_bandwidth(dmfc);
 
 	if (slots > 8) {
 		ret = -EBUSY;
