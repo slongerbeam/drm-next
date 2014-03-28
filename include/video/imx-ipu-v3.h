@@ -205,6 +205,14 @@ void ipu_cpmem_dump(struct ipuv3_channel *ch);
 /*
  * IPU Display Controller (dc) functions
  */
+
+#define IPU_DC_CHANNEL_DP_SYNC       5 /* sync main+aux planes */
+#define IPU_DC_CHANNEL_SYNC          1 /* sync single plane (no DP) */
+#define IPU_DC_CHANNEL_DP_ASYNC      6 /* async main+aux planes */
+#define IPU_DC_CHANNEL_ASYNC         2 /* async single plane (no DP) */
+#define IPU_DC_CHANNEL_READ          0 /* DC read channel */
+#define IPU_DC_NUM_CHANNELS         10
+
 struct ipu_dc;
 struct ipu_di;
 struct ipu_dc *ipu_dc_get(struct ipu_soc *ipu, int channel);

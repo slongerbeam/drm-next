@@ -82,8 +82,6 @@
 #define DC_WR_CH_CONF_PROG_DI_ID		(1 << 2)
 #define DC_WR_CH_CONF_PROG_DISP_ID(i)		(((i) & 0x1) << 3)
 
-#define IPU_DC_NUM_CHANNELS	10
-
 struct ipu_dc_priv;
 
 enum ipu_dc_map {
@@ -284,9 +282,9 @@ void ipu_dc_disable_channel(struct ipu_dc *dc)
 	u32 val;
 
 	/* TODO: Handle MEM_FG_SYNC differently from MEM_BG_SYNC */
-	if (dc->chno == 1)
+	if (dc->chno == IPU_DC_CHANNEL_SYNC)
 		irq = priv->dc_irq;
-	else if (dc->chno == 5)
+	else if (dc->chno == IPU_DC_CHANNEL_DP_SYNC)
 		irq = priv->dp_irq;
 	else
 		return;
