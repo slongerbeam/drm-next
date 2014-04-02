@@ -72,6 +72,10 @@
 #define  DRM_MODE_FLAG_3D_L_DEPTH_GFX_GFX_DEPTH	(6<<14)
 #define  DRM_MODE_FLAG_3D_TOP_AND_BOTTOM	(7<<14)
 #define  DRM_MODE_FLAG_3D_SIDE_BY_SIDE_HALF	(8<<14)
+/* drive data on rising pixclk edge */
+#define DRM_MODE_FLAG_PCLK			(1<<19)
+/* drive data on falling pixclk edge */
+#define DRM_MODE_FLAG_NCLK			(1<<20)
 
 
 /* DPMS flags */
