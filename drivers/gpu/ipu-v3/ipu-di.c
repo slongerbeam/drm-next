@@ -207,10 +207,10 @@ static void ipu_di_sync_config(struct ipu_di *di, struct di_sync_config *config,
 static void ipu_di_sync_config_interlaced(struct ipu_di *di,
 		struct ipu_di_signal_cfg *sig)
 {
-	u32 h_total = sig->width + sig->h_sync_width +
-		sig->h_start_width + sig->h_end_width;
-	u32 v_total = sig->height + sig->v_sync_width +
-		sig->v_start_width + sig->v_end_width;
+	u32 h_total = sig->width + sig->h_sync_len +
+		sig->h_back_porch + sig->h_front_porch;
+	u32 v_total = sig->height + sig->v_sync_len +
+		sig->v_back_porch + sig->v_front_porch;
 	u32 reg;
 	struct di_sync_config cfg[] = {
 		{
@@ -229,7 +229,7 @@ static void ipu_di_sync_config_interlaced(struct ipu_di *di,
 		}, {
 			.run_count = v_total / 2 - 1,
 			.run_src = DI_SYNC_HSYNC,
-			.offset_count = sig->v_start_width,
+			.offset_count = sig->v_back_porch,
 			.offset_src = DI_SYNC_HSYNC,
 			.repeat_count = 2,
 			.cnt_clr_src = DI_SYNC_VSYNC,
@@ -249,7 +249,7 @@ static void ipu_di_sync_config_interlaced(struct ipu_di *di,
 			.cnt_clr_src = DI_SYNC_VSYNC,
 		}, {
 			.run_src = DI_SYNC_CLK,
-			.offset_count = sig->h_start_width,
+			.offset_count = sig->h_back_porch,
 			.offset_src = DI_SYNC_CLK,
 			.repeat_count = sig->width,
 			.cnt_clr_src = 5,
@@ -277,10 +277,10 @@ static void ipu_di_sync_config_interlaced(struct ipu_di *di,
 static void ipu_di_sync_config_noninterlaced(struct ipu_di *di,
 		struct ipu_di_signal_cfg *sig, int div)
 {
-	u32 h_total = sig->width + sig->h_sync_width + sig->h_start_width +
-		sig->h_end_width;
-	u32 v_total = sig->height + sig->v_sync_width + sig->v_start_width +
-		sig->v_end_width;
+	u32 h_total = sig->width + sig->h_sync_len + sig->h_back_porch +
+		sig->h_front_porch;
+	u32 v_total = sig->height + sig->v_sync_len + sig->v_back_porch +
+		sig->v_front_porch;
 	struct di_sync_config cfg[] = {
 		{
 			/* 1: INT_HSYNC */
@@ -294,25 +294,25 @@ static void ipu_di_sync_config_noninterlaced(struct ipu_di *di,
 			.offset_src = DI_SYNC_CLK,
 			.cnt_polarity_gen_en = 1,
 			.cnt_polarity_trigger_src = DI_SYNC_CLK,
-			.cnt_down = sig->h_sync_width * 2,
+			.cnt_down = sig->h_sync_len * 2,
 		} , {
 			/* PIN3: VSYNC */
 			.run_count = v_total - 1,
 			.run_src = DI_SYNC_INT_HSYNC,
 			.cnt_polarity_gen_en = 1,
 			.cnt_polarity_trigger_src = DI_SYNC_INT_HSYNC,
-			.cnt_down = sig->v_sync_width * 2,
+			.cnt_down = sig->v_sync_len * 2,
 		} , {
 			/* 4: Line Active */
 			.run_src = DI_SYNC_HSYNC,
-			.offset_count = sig->v_sync_width + sig->v_start_width,
+			.offset_count = sig->v_sync_len + sig->v_back_porch,
 			.offset_src = DI_SYNC_HSYNC,
 			.repeat_count = sig->height,
 			.cnt_clr_src = DI_SYNC_VSYNC,
 		} , {
 			/* 5: Pixel Active, referenced by DC */
 			.run_src = DI_SYNC_CLK,
-			.offset_count = sig->h_sync_width + sig->h_start_width,
+			.offset_count = sig->h_sync_len + sig->h_back_porch,
 			.offset_src = DI_SYNC_CLK,
 			.repeat_count = sig->width,
 			.cnt_clr_src = 5, /* Line Active */
@@ -339,7 +339,7 @@ static void ipu_di_sync_config_noninterlaced(struct ipu_di *di,
 		} , {
 			/* 3: Line Active */
 			.run_src = DI_SYNC_INT_HSYNC,
-			.offset_count = sig->v_sync_width + sig->v_start_width,
+			.offset_count = sig->v_sync_len + sig->v_back_porch,
 			.offset_src = DI_SYNC_INT_HSYNC,
 			.repeat_count = sig->height,
 			.cnt_clr_src = 3 /* VSYNC */,
@@ -351,11 +351,11 @@ static void ipu_di_sync_config_noninterlaced(struct ipu_di *di,
 			.offset_src = DI_SYNC_CLK,
 			.cnt_polarity_gen_en = 1,
 			.cnt_polarity_trigger_src = DI_SYNC_CLK,
-			.cnt_down = sig->h_sync_width * 2,
+			.cnt_down = sig->h_sync_len * 2,
 		} , {
 			/* 5: Pixel Active signal to DC */
 			.run_src = DI_SYNC_CLK,
-			.offset_count = sig->h_sync_width + sig->h_start_width,
+			.offset_count = sig->h_sync_len + sig->h_back_porch,
 			.offset_src = DI_SYNC_CLK,
 			.repeat_count = sig->width,
 			.cnt_clr_src = 4, /* Line Active */
@@ -367,7 +367,7 @@ static void ipu_di_sync_config_noninterlaced(struct ipu_di *di,
 			.offset_src = DI_SYNC_INT_HSYNC,
 			.cnt_polarity_gen_en = 1,
 			.cnt_polarity_trigger_src = DI_SYNC_INT_HSYNC,
-			.cnt_down = sig->v_sync_width * 2,
+			.cnt_down = sig->v_sync_len * 2,
 		} , {
 			/* PIN4: HSYNC for VGA via TVEv2 on i.MX53-QSB */
 			.run_count = h_total - 1,
@@ -376,7 +376,7 @@ static void ipu_di_sync_config_noninterlaced(struct ipu_di *di,
 			.offset_src = DI_SYNC_CLK,
 			.cnt_polarity_gen_en = 1,
 			.cnt_polarity_trigger_src = DI_SYNC_CLK,
-			.cnt_down = sig->h_sync_width * 2,
+			.cnt_down = sig->h_sync_len * 2,
 		} , {
 			/* PIN6: VSYNC for VGA via TVEv2 on i.MX53-QSB */
 			.run_count = v_total - 1,
@@ -385,7 +385,7 @@ static void ipu_di_sync_config_noninterlaced(struct ipu_di *di,
 			.offset_src = DI_SYNC_INT_HSYNC,
 			.cnt_polarity_gen_en = 1,
 			.cnt_polarity_trigger_src = DI_SYNC_INT_HSYNC,
-			.cnt_down = sig->v_sync_width * 2,
+			.cnt_down = sig->v_sync_len * 2,
 		} , {
 			/* unused */
 		},
@@ -522,15 +522,15 @@ static void ipu_di_config_clock(struct ipu_di *di,
 static void adapt_panel_to_ipu_restricitions(struct ipu_di *di,
 					     struct ipu_di_signal_cfg *sig)
 {
-	if (sig->v_end_width < 2) {
-		uint16_t diff = 2 - sig->v_end_width;
+	if (sig->v_front_porch < 2) {
+		uint16_t diff = 2 - sig->v_front_porch;
 
-		if (sig->v_start_width >= diff) {
-			sig->v_end_width = 2;
-			sig->v_start_width -= diff;
-		} else if (sig->v_sync_width > diff) {
-			sig->v_end_width = 2;
-			sig->v_sync_width = sig->v_sync_width - diff;
+		if (sig->v_back_porch >= diff) {
+			sig->v_front_porch = 2;
+			sig->v_back_porch -= diff;
+		} else if (sig->v_sync_len > diff) {
+			sig->v_front_porch = 2;
+			sig->v_sync_len = sig->v_sync_len - diff;
 		} else
 			dev_warn(di->ipu->dev,
 				 "di%d: failed to adapt timing\n", di->id);
@@ -550,7 +550,7 @@ int ipu_di_init_sync_panel(struct ipu_di *di, struct ipu_di_signal_cfg *sig)
 	dev_dbg(di->ipu->dev, "di%d: panel size = %d x %d\n",
 		di->id, sig->width, sig->height);
 
-	if ((sig->v_sync_width == 0) || (sig->h_sync_width == 0))
+	if ((sig->v_sync_len == 0) || (sig->h_sync_len == 0))
 		return -EINVAL;
 
 	adapt_panel_to_ipu_restricitions(di, sig);
@@ -589,9 +589,9 @@ int ipu_di_init_sync_panel(struct ipu_di *di, struct ipu_di_signal_cfg *sig)
 
 		vsync_cnt = 7;
 
-		if (sig->Hsync_pol)
+		if (sig->hsync_pol)
 			di_gen |= DI_GEN_POLARITY_3;
-		if (sig->Vsync_pol)
+		if (sig->vsync_pol)
 			di_gen |= DI_GEN_POLARITY_2;
 	} else {
 		ipu_di_sync_config_noninterlaced(di, sig, div);
@@ -605,7 +605,7 @@ int ipu_di_init_sync_panel(struct ipu_di *di, struct ipu_di_signal_cfg *sig)
 			if (!(sig->hsync_pin == 2 && sig->vsync_pin == 3))
 				vsync_cnt = 6;
 
-		if (sig->Hsync_pol) {
+		if (sig->hsync_pol) {
 			if (sig->hsync_pin == 2)
 				di_gen |= DI_GEN_POLARITY_2;
 			else if (sig->hsync_pin == 4)
@@ -613,7 +613,7 @@ int ipu_di_init_sync_panel(struct ipu_di *di, struct ipu_di_signal_cfg *sig)
 			else if (sig->hsync_pin == 7)
 				di_gen |= DI_GEN_POLARITY_7;
 		}
-		if (sig->Vsync_pol) {
+		if (sig->vsync_pol) {
 			if (sig->vsync_pin == 3)
 				di_gen |= DI_GEN_POLARITY_3;
 			else if (sig->vsync_pin == 6)

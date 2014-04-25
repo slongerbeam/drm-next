@@ -40,18 +40,18 @@ struct ipu_di_signal_cfg {
 	unsigned data_pol:1;	/* true = inverted */
 	unsigned clk_pol:1;	/* true = rising edge */
 	unsigned enable_pol:1;
-	unsigned Hsync_pol:1;	/* true = active high */
-	unsigned Vsync_pol:1;
+	unsigned hsync_pol:1;	/* true = active high */
+	unsigned vsync_pol:1;
 
 	u16 width;
 	u16 height;
 	u32 pixel_fmt;
-	u16 h_start_width;
-	u16 h_sync_width;
-	u16 h_end_width;
-	u16 v_start_width;
-	u16 v_sync_width;
-	u16 v_end_width;
+	u16 h_back_porch;
+	u16 h_sync_len;
+	u16 h_front_porch;
+	u16 v_back_porch;
+	u16 v_sync_len;
+	u16 v_front_porch;
 	u32 v_to_h_sync;
 	unsigned long pixelclock;
 #define IPU_DI_CLKMODE_SYNC	(1 << 0)
