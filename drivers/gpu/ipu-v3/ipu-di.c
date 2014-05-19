@@ -172,7 +172,7 @@ static void ipu_di_sync_config(struct ipu_di *di, struct di_sync_config *config,
 				(c->repeat_count >= 0x1000) ||
 				(c->cnt_up >= 0x400) ||
 				(c->cnt_down >= 0x400)) {
-			dev_err(di->ipu->dev, "DI%d counters out of range.\n",
+			dev_err(di->ipu->dev, "di%d counters out of range.\n",
 					di->id);
 			return;
 		}
@@ -459,8 +459,10 @@ static void ipu_di_config_clock(struct ipu_di *di,
 
 		error = rate / (sig->pixelclock / 1000);
 
-		dev_dbg(di->ipu->dev, "  IPU clock can give %lu with divider %u, error %d.%u%%\n",
-			rate, div, (signed)(error - 1000) / 10, error % 10);
+		dev_dbg(di->ipu->dev,
+			"di%d: IPU clock can give %lu with divider %u, error %d.%u%%\n",
+			di->id, rate, div, (signed)(error - 1000) / 10,
+			error % 10);
 
 		/* Allow a 1% error */
 		if (error < 1010 && error >= 990) {
@@ -503,7 +505,9 @@ static void ipu_di_config_clock(struct ipu_di *di,
 		val |= DI_GEN_DI_CLK_EXT;
 	ipu_di_write(di, val, DI_GENERAL);
 
-	dev_dbg(di->ipu->dev, "Want %luHz IPU %luHz DI %luHz using %s, %luHz\n",
+	dev_dbg(di->ipu->dev,
+		"di%d: Want %luHz IPU %luHz DI %luHz using %s, %luHz\n",
+		di->id,
 		sig->pixelclock,
 		clk_get_rate(di->clk_ipu),
 		clk_get_rate(di->clk_di),
@@ -528,10 +532,12 @@ static void adapt_panel_to_ipu_restricitions(struct ipu_di *di,
 			sig->v_end_width = 2;
 			sig->v_sync_width = sig->v_sync_width - diff;
 		} else
-			dev_warn(di->ipu->dev, "failed to adapt timing\n");
+			dev_warn(di->ipu->dev,
+				 "di%d: failed to adapt timing\n", di->id);
 
 		dev_warn(di->ipu->dev,
-			 "timing adapted due to IPU restrictions\n");
+			 "di%d: timing adapted due to IPU restrictions\n",
+			 di->id);
 	}
 }
 
@@ -541,7 +547,7 @@ int ipu_di_init_sync_panel(struct ipu_di *di, struct ipu_di_signal_cfg *sig)
 	u32 di_gen, vsync_cnt;
 	u32 div;
 
-	dev_dbg(di->ipu->dev, "disp %d: panel size = %d x %d\n",
+	dev_dbg(di->ipu->dev, "di%d: panel size = %d x %d\n",
 		di->id, sig->width, sig->height);
 
 	if ((sig->v_sync_width == 0) || (sig->h_sync_width == 0))
@@ -549,7 +555,9 @@ int ipu_di_init_sync_panel(struct ipu_di *di, struct ipu_di_signal_cfg *sig)
 
 	adapt_panel_to_ipu_restricitions(di, sig);
 
-	dev_dbg(di->ipu->dev, "Clocks: IPU %luHz DI %luHz Needed %luHz\n",
+	dev_dbg(di->ipu->dev,
+		"di%d: Clocks: IPU %luHz DI %luHz Needed %luHz\n",
+		di->id,
 		clk_get_rate(di->clk_ipu),
 		clk_get_rate(di->clk_di),
 		sig->pixelclock);
@@ -762,8 +770,10 @@ int ipu_di_init(struct ipu_soc *ipu, struct device *dev, int id,
 	ipu->di_priv[id] = di;
 
 	di->clk_di = devm_clk_get(dev, id ? "di1" : "di0");
-	if (IS_ERR(di->clk_di))
+	if (IS_ERR(di->clk_di)) {
+		dev_err(dev, "di%d: could not get clock\n", id);
 		return PTR_ERR(di->clk_di);
+	}
 
 	di->ipu = ipu;
 	di->module = module;
@@ -775,7 +785,7 @@ int ipu_di_init(struct ipu_soc *ipu, struct device *dev, int id,
 
 	ipu_di_write(di, 0x10, DI_BS_CLKGEN0);
 
-	dev_dbg(dev, "DI%d base: 0x%08lx remapped to %p\n",
+	dev_dbg(dev, "di%d: base: 0x%08lx remapped to %p\n",
 			id, base, di->base);
 	di->inuse = false;
 
