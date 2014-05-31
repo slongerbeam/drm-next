@@ -755,6 +755,7 @@ int ipu_di_init(struct ipu_soc *ipu, struct device *dev, int id,
 	if (IS_ERR(di->clk_di))
 		return PTR_ERR(di->clk_di);
 
+	di->ipu = ipu;
 	di->module = module;
 	di->id = id;
 	di->clk_ipu = clk_ipu;
@@ -767,7 +768,6 @@ int ipu_di_init(struct ipu_soc *ipu, struct device *dev, int id,
 	dev_dbg(dev, "DI%d base: 0x%08lx remapped to %p\n",
 			id, base, di->base);
 	di->inuse = false;
-	di->ipu = ipu;
 
 	return 0;
 }
