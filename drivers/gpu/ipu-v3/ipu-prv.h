@@ -78,6 +78,12 @@ struct ipu_soc;
 #define IPU_DI0_COUNTER_RELEASE			(1 << 24)
 #define IPU_DI1_COUNTER_RELEASE			(1 << 25)
 
+/* IPU_FS_PROC_FLOW1 */
+#define FS_VDI_SRC_SEL_OFFSET			28
+#define FS_VDI_SRC_SEL_MASK			(0x3 << 28)
+#define FS_VDI_SRC_SEL_CSI_DIRECT		(0x1 << 28)
+#define FS_VDI_SRC_SEL_VDOA			(0x2 << 28)
+
 #define IPU_IDMAC_REG(offset)	(offset)
 
 #define IDMAC_CONF			IPU_IDMAC_REG(0x0000)
