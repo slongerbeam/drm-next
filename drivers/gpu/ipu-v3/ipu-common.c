@@ -46,11 +46,16 @@ static inline void ipu_cm_write(struct ipu_soc *ipu, u32 value, unsigned offset)
 
 void ipu_srm_dp_sync_update(struct ipu_soc *ipu)
 {
+	unsigned long flags;
 	u32 val;
+
+	spin_lock_irqsave(&ipu->lock, flags);
 
 	val = ipu_cm_read(ipu, IPU_SRM_PRI2);
 	val |= 0x8;
 	ipu_cm_write(ipu, val, IPU_SRM_PRI2);
+
+	spin_unlock_irqrestore(&ipu->lock, flags);
 }
 EXPORT_SYMBOL_GPL(ipu_srm_dp_sync_update);
 
@@ -451,8 +456,17 @@ int ipu_idmac_get_current_buffer(struct ipuv3_channel *channel)
 {
 	struct ipu_soc *ipu = channel->ipu;
 	unsigned int chno = channel->num;
+	unsigned long flags;
+	int ret;
 
-	return (ipu_cm_read(ipu, IPU_CHA_CUR_BUF(chno)) & idma_mask(chno)) ? 1 : 0;
+	spin_lock_irqsave(&ipu->lock, flags);
+
+	ret = (ipu_cm_read(ipu, IPU_CHA_CUR_BUF(chno)) & idma_mask(chno)) ?
+		1 : 0;
+
+	spin_unlock_irqrestore(&ipu->lock, flags);
+
+	return ret;
 }
 EXPORT_SYMBOL_GPL(ipu_idmac_get_current_buffer);
 
@@ -569,10 +583,14 @@ EXPORT_SYMBOL_GPL(ipu_idmac_wait_busy);
 
 int ipu_wait_interrupt(struct ipu_soc *ipu, int irq, int ms)
 {
-	unsigned long timeout;
+	unsigned long flags, timeout;
 
 	timeout = jiffies + msecs_to_jiffies(ms);
+
+	spin_lock_irqsave(&ipu->lock, flags);
 	ipu_cm_write(ipu, BIT(irq % 32), IPU_INT_STAT(irq / 32));
+	spin_unlock_irqrestore(&ipu->lock, flags);
+
 	while (!(ipu_cm_read(ipu, IPU_INT_STAT(irq / 32) & BIT(irq % 32)))) {
 		if (time_after(jiffies, timeout))
 			return -ETIMEDOUT;
