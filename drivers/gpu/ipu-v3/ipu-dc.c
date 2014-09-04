@@ -341,9 +341,11 @@ void ipu_dc_uninit_sync(struct ipu_dc *dc)
 }
 EXPORT_SYMBOL_GPL(ipu_dc_uninit_sync);
 
-void ipu_dc_enable(struct ipu_soc *ipu)
+void ipu_dc_enable(struct ipu_dc *dc)
 {
-	ipu_module_enable(ipu, IPU_CONF_DC_EN);
+	struct ipu_dc_priv *priv = dc->priv;
+
+	ipu_module_enable(priv->ipu, IPU_CONF_DC_EN);
 }
 EXPORT_SYMBOL_GPL(ipu_dc_enable);
 
@@ -403,9 +405,11 @@ void ipu_dc_disable_channel(struct ipu_dc *dc)
 }
 EXPORT_SYMBOL_GPL(ipu_dc_disable_channel);
 
-void ipu_dc_disable(struct ipu_soc *ipu)
+void ipu_dc_disable(struct ipu_dc *dc)
 {
-	ipu_module_disable(ipu, IPU_CONF_DC_EN);
+	struct ipu_dc_priv *priv = dc->priv;
+
+	ipu_module_disable(priv->ipu, IPU_CONF_DC_EN);
 }
 EXPORT_SYMBOL_GPL(ipu_dc_disable);
 

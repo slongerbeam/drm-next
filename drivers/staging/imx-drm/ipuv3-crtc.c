@@ -60,12 +60,10 @@ struct ipu_crtc {
 
 static void ipu_fb_enable(struct ipu_crtc *ipu_crtc)
 {
-	struct ipu_soc *ipu = dev_get_drvdata(ipu_crtc->dev->parent);
-
 	if (ipu_crtc->enabled)
 		return;
 
-	ipu_dc_enable(ipu);
+	ipu_dc_enable(ipu_crtc->dc);
 	ipu_plane_enable(ipu_crtc->plane[0]);
 	/* Start DC channel and DI after IDMAC */
 	ipu_dc_enable_channel(ipu_crtc->dc);
@@ -76,8 +74,6 @@ static void ipu_fb_enable(struct ipu_crtc *ipu_crtc)
 
 static void ipu_fb_disable(struct ipu_crtc *ipu_crtc)
 {
-	struct ipu_soc *ipu = dev_get_drvdata(ipu_crtc->dev->parent);
-
 	if (!ipu_crtc->enabled)
 		return;
 
@@ -85,7 +81,7 @@ static void ipu_fb_disable(struct ipu_crtc *ipu_crtc)
 	ipu_dc_disable_channel(ipu_crtc->dc);
 	ipu_di_disable(ipu_crtc->di);
 	ipu_plane_disable(ipu_crtc->plane[0]);
-	ipu_dc_disable(ipu);
+	ipu_dc_disable(ipu_crtc->dc);
 
 	ipu_crtc->enabled = 0;
 }
