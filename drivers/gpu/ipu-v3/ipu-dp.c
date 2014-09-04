@@ -362,9 +362,10 @@ void ipu_dp_uninit_channel(struct ipu_dp *dp)
 }
 EXPORT_SYMBOL_GPL(ipu_dp_uninit_channel);
 
-int ipu_dp_enable(struct ipu_soc *ipu)
+int ipu_dp_enable(struct ipu_dp *dp)
 {
-	struct ipu_dp_priv *priv = ipu->dp_priv;
+	struct ipu_flow *flow = to_flow(dp);
+	struct ipu_dp_priv *priv = flow->priv;
 
 	mutex_lock(&priv->mutex);
 
@@ -431,9 +432,10 @@ void ipu_dp_disable_channel(struct ipu_dp *dp)
 }
 EXPORT_SYMBOL_GPL(ipu_dp_disable_channel);
 
-void ipu_dp_disable(struct ipu_soc *ipu)
+void ipu_dp_disable(struct ipu_dp *dp)
 {
-	struct ipu_dp_priv *priv = ipu->dp_priv;
+	struct ipu_flow *flow = to_flow(dp);
+	struct ipu_dp_priv *priv = flow->priv;
 
 	mutex_lock(&priv->mutex);
 
