@@ -230,7 +230,7 @@ err_out:
 void ipu_plane_enable(struct ipu_plane *ipu_plane)
 {
 	if (ipu_plane->dp)
-		ipu_dp_enable(ipu_plane->ipu);
+		ipu_dp_enable(ipu_plane->dp);
 	ipu_dmfc_enable_channel(ipu_plane->dmfc);
 	ipu_idmac_enable_channel(ipu_plane->ipu_ch);
 	if (ipu_plane->dp)
@@ -250,7 +250,7 @@ void ipu_plane_disable(struct ipu_plane *ipu_plane)
 	ipu_idmac_disable_channel(ipu_plane->ipu_ch);
 	ipu_dmfc_disable_channel(ipu_plane->dmfc);
 	if (ipu_plane->dp)
-		ipu_dp_disable(ipu_plane->ipu);
+		ipu_dp_disable(ipu_plane->dp);
 }
 
 /*
