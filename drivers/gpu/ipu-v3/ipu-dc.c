@@ -234,9 +234,9 @@ int ipu_dc_init_sync(struct ipu_dc *dc, struct ipu_di *di, bool interlaced,
 }
 EXPORT_SYMBOL_GPL(ipu_dc_init_sync);
 
-void ipu_dc_enable(struct ipu_soc *ipu)
+void ipu_dc_enable(struct ipu_dc *dc)
 {
-	struct ipu_dc_priv *priv = ipu->dc_priv;
+	struct ipu_dc_priv *priv = dc->priv;
 
 	mutex_lock(&priv->mutex);
 
@@ -305,9 +305,9 @@ void ipu_dc_disable_channel(struct ipu_dc *dc)
 }
 EXPORT_SYMBOL_GPL(ipu_dc_disable_channel);
 
-void ipu_dc_disable(struct ipu_soc *ipu)
+void ipu_dc_disable(struct ipu_dc *dc)
 {
-	struct ipu_dc_priv *priv = ipu->dc_priv;
+	struct ipu_dc_priv *priv = dc->priv;
 
 	mutex_lock(&priv->mutex);
 
