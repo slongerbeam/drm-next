@@ -186,7 +186,7 @@ static int ipu_crtc_mode_set(struct drm_crtc *crtc,
 	sig_cfg.vsync_pin = ipu_crtc->di_vsync_pin;
 
 	ret = ipu_dc_init_sync(ipu_crtc->dc, ipu_crtc->di, sig_cfg.interlaced,
-			out_pixel_fmt, mode->hdisplay);
+			out_pixel_fmt, NULL, mode->hdisplay);
 	if (ret) {
 		dev_err(ipu_crtc->dev,
 				"initializing display controller failed with %d\n",
