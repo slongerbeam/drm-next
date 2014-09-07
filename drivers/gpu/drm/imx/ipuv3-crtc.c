@@ -169,7 +169,7 @@ static int ipu_crtc_mode_set(struct drm_crtc *crtc,
 	ret = ipu_dc_init_sync(ipu_crtc->dc, ipu_crtc->di,
 			       (mode->flags & DRM_MODE_FLAG_INTERLACE) ?
 			       true : false,
-			       out_pixel_fmt, mode->hdisplay);
+			       out_pixel_fmt, NULL, mode->hdisplay);
 	if (ret) {
 		dev_err(ipu_crtc->dev,
 				"initializing display controller failed with %d\n",

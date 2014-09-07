@@ -215,12 +215,32 @@ void ipu_cpmem_dump(struct ipuv3_channel *ch);
 #define IPU_DC_CHANNEL_READ          0 /* DC read channel */
 #define IPU_DC_NUM_CHANNELS         10
 
+/*
+ * This structure defines how to map each color component of the incoming
+ * RGB24 or YUV444 pixels arriving at the DC onto the DI bus:
+ *
+ * src_mask[] defines which bits of each incoming 8-bit RGB24/YUV444
+ *            component are to be selected and forwarded to the DI bus
+ *            (as a bit mask).
+ *
+ * dest_msb[] defines where to place the selected bits of each component
+ *            on the DI bus (as the most-significant-bit position).
+ *
+ * v4l2_fmt   non-zero if this mapping corresponds to a standard
+ *            V4L2 pixel format.
+ */
+struct ipu_dc_if_map {
+	u32 src_mask[3];
+	u32 dest_msb[3];
+	u32 v4l2_fmt;
+};
+
 struct ipu_dc;
 struct ipu_di;
 struct ipu_dc *ipu_dc_get(struct ipu_soc *ipu, int channel);
 void ipu_dc_put(struct ipu_dc *dc);
 int ipu_dc_init_sync(struct ipu_dc *dc, struct ipu_di *di, bool interlaced,
-		u32 pixel_fmt, u32 width);
+		     u32 pixel_fmt, struct ipu_dc_if_map *new_map, u32 width);
 void ipu_dc_enable(struct ipu_dc *dc);
 void ipu_dc_enable_channel(struct ipu_dc *dc);
 void ipu_dc_disable_channel(struct ipu_dc *dc);
