@@ -167,6 +167,62 @@
 			interrupts = <0 94 IRQ_TYPE_LEVEL_HIGH>;
 		};
 
+		crtc0: crtc@0 {
+			compatible = "fsl,imx-ipuv3-crtc";
+			ipu = <&ipu1>;
+			di = <0>;
+			dual-plane;
+
+			port {
+				crtc0_disp0: endpoint@0 {
+				};
+
+				crtc0_hdmi: endpoint@1 {
+					remote-endpoint = <&hdmi_mux_0>;
+				};
+
+				crtc0_mipi: endpoint@2 {
+					remote-endpoint = <&mipi_mux_0>;
+				};
+
+				crtc0_lvds0: endpoint@3 {
+					remote-endpoint = <&lvds0_mux_0>;
+				};
+
+				crtc0_lvds1: endpoint@4 {
+					remote-endpoint = <&lvds1_mux_0>;
+				};
+			};
+
+		};
+
+		crtc1: crtc@1 {
+			compatible = "fsl,imx-ipuv3-crtc";
+			ipu = <&ipu1>;
+			di = <1>;
+
+			port {
+				crtc1_disp0: endpoint@0 {
+				};
+
+				crtc1_hdmi: endpoint@1 {
+					remote-endpoint = <&hdmi_mux_1>;
+				};
+
+				crtc1_mipi: endpoint@2 {
+					remote-endpoint = <&mipi_mux_1>;
+				};
+
+				crtc1_lvds0: endpoint@3 {
+					remote-endpoint = <&lvds0_mux_1>;
+				};
+
+				crtc1_lvds1: endpoint@4 {
+					remote-endpoint = <&lvds1_mux_1>;
+				};
+			};
+		};
+
 		aips-bus@02000000 { /* AIPS1 */
 			compatible = "fsl,aips-bus", "simple-bus";
 			#address-cells = <1>;
@@ -711,7 +767,7 @@
 						reg = <0>;
 
 						lvds0_mux_0: endpoint {
-							remote-endpoint = <&ipu1_di0_lvds0>;
+							remote-endpoint = <&crtc0_lvds0>;
 						};
 					};
 
@@ -719,7 +775,7 @@
 						reg = <1>;
 
 						lvds0_mux_1: endpoint {
-							remote-endpoint = <&ipu1_di1_lvds0>;
+							remote-endpoint = <&crtc1_lvds0>;
 						};
 					};
 				};
@@ -734,7 +790,7 @@
 						reg = <0>;
 
 						lvds1_mux_0: endpoint {
-							remote-endpoint = <&ipu1_di0_lvds1>;
+							remote-endpoint = <&crtc0_lvds1>;
 						};
 					};
 
@@ -742,7 +798,7 @@
 						reg = <1>;
 
 						lvds1_mux_1: endpoint {
-							remote-endpoint = <&ipu1_di1_lvds1>;
+							remote-endpoint = <&crtc1_lvds1>;
 						};
 					};
 				};
@@ -763,7 +819,7 @@
 					reg = <0>;
 
 					hdmi_mux_0: endpoint {
-						remote-endpoint = <&ipu1_di0_hdmi>;
+						remote-endpoint = <&crtc0_hdmi>;
 					};
 				};
 
@@ -771,7 +827,7 @@
 					reg = <1>;
 
 					hdmi_mux_1: endpoint {
-						remote-endpoint = <&ipu1_di1_hdmi>;
+						remote-endpoint = <&crtc1_hdmi>;
 					};
 				};
 			};
@@ -1013,7 +1069,7 @@
 					reg = <0>;
 
 					mipi_mux_0: endpoint {
-						remote-endpoint = <&ipu1_di0_mipi>;
+						remote-endpoint = <&crtc0_mipi>;
 					};
 				};
 
@@ -1021,7 +1077,7 @@
 					reg = <1>;
 
 					mipi_mux_1: endpoint {
-						remote-endpoint = <&ipu1_di1_mipi>;
+						remote-endpoint = <&crtc1_mipi>;
 					};
 				};
 			};
@@ -1099,56 +1155,6 @@
 
 			ipu1_csi1: port@1 {
 				reg = <1>;
-			};
-
-			ipu1_di0: port@2 {
-				#address-cells = <1>;
-				#size-cells = <0>;
-				reg = <2>;
-
-				ipu1_di0_disp0: endpoint@0 {
-				};
-
-				ipu1_di0_hdmi: endpoint@1 {
-					remote-endpoint = <&hdmi_mux_0>;
-				};
-
-				ipu1_di0_mipi: endpoint@2 {
-					remote-endpoint = <&mipi_mux_0>;
-				};
-
-				ipu1_di0_lvds0: endpoint@3 {
-					remote-endpoint = <&lvds0_mux_0>;
-				};
-
-				ipu1_di0_lvds1: endpoint@4 {
-					remote-endpoint = <&lvds1_mux_0>;
-				};
-			};
-
-			ipu1_di1: port@3 {
-				#address-cells = <1>;
-				#size-cells = <0>;
-				reg = <3>;
-
-				ipu1_di0_disp1: endpoint@0 {
-				};
-
-				ipu1_di1_hdmi: endpoint@1 {
-					remote-endpoint = <&hdmi_mux_1>;
-				};
-
-				ipu1_di1_mipi: endpoint@2 {
-					remote-endpoint = <&mipi_mux_1>;
-				};
-
-				ipu1_di1_lvds0: endpoint@3 {
-					remote-endpoint = <&lvds0_mux_1>;
-				};
-
-				ipu1_di1_lvds1: endpoint@4 {
-					remote-endpoint = <&lvds1_mux_1>;
-				};
 			};
 		};
 	};

@@ -98,7 +98,7 @@
 
 	display-subsystem {
 		compatible = "fsl,imx-display-subsystem";
-		ports = <&ipu1_di0>, <&ipu1_di1>;
+		crtcs = <&crtc0>, <&crtc1>;
 	};
 };
 
