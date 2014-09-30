@@ -655,12 +655,12 @@ static inline void hdmi_phy_test_dout(struct imx_hdmi *hdmi,
 	hdmi_writeb(hdmi, bit, HDMI_PHY_TST2);
 }
 
-static bool hdmi_phy_wait_i2c_done(struct imx_hdmi *hdmi, int msec)
+static bool hdmi_phy_wait_i2c_done(struct imx_hdmi *hdmi, int husec)
 {
 	while ((hdmi_readb(hdmi, HDMI_IH_I2CMPHY_STAT0) & 0x3) == 0) {
-		if (msec-- == 0)
+		if (husec-- == 0)
 			return false;
-		udelay(1000);
+		udelay(100);
 	}
 	return true;
 }
