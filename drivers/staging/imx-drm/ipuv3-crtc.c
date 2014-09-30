@@ -36,10 +36,52 @@
 
 #define DRIVER_DESC		"i.MX IPUv3 Graphics"
 
+struct ipu_channels {
+	int dma[2]; /* BG, FG */
+	int dp[2];  /* BG, FG */
+	int dc;
+};
+
+#define NO_DP -1
+
+static const struct ipu_channels sync_dual_plane = {
+	.dma = { IPUV3_CHANNEL_MEM_BG_SYNC, IPUV3_CHANNEL_MEM_FG_SYNC },
+	.dp  = { IPU_DP_FLOW_SYNC_BG, IPU_DP_FLOW_SYNC_FG },
+	.dc  = IPU_DC_CHANNEL_DP_SYNC,
+};
+static const struct ipu_channels sync_single_plane = {
+	.dma = { IPUV3_CHANNEL_MEM_DC_SYNC, },
+	.dp  = { NO_DP, NO_DP },
+	.dc  = IPU_DC_CHANNEL_SYNC,
+};
+
+/*
+ * This driver does not yet support async flows for "smart" displays,
+ * but keep this around for future reference. The crtc nodes could in
+ * future add an "async" property.
+ */
+#if 0
+static const struct ipu_channels async_dual_plane = {
+	.dma = { IPUV3_CHANNEL_MEM_BG_ASYNC, IPUV3_CHANNEL_MEM_FG_ASYNC },
+	.dp  = { IPU_DP_FLOW_ASYNC0_BG, IPU_DP_FLOW_ASYNC0_FG },
+	.dc  = IPU_DC_CHANNEL_DP_ASYNC,
+};
+static const struct ipu_channels async_single_plane = {
+	.dma = { IPUV3_CHANNEL_MEM_DC_ASYNC, },
+	.dp  = { NO_DP, NO_DP },
+	.dc    = IPU_DC_CHANNEL_ASYNC,
+};
+#endif
+
 struct ipu_crtc {
 	struct device		*dev;
 	struct drm_crtc		base;
 	struct imx_drm_crtc	*imx_crtc;
+	struct device           *ipu_dev; /* our ipu */
+	struct ipu_soc          *ipu;
+	struct device_node      *port;    /* our port */
+
+	const struct ipu_channels *ch;
 
 	/* plane[0] is the full plane, plane[1] is the partial plane */
 	struct ipu_plane	*plane[2];
@@ -311,29 +353,103 @@ static const struct imx_drm_crtc_helper_funcs ipu_crtc_helper_funcs = {
 	.crtc_helper_funcs = &ipu_helper_funcs,
 };
 
+static int of_dev_node_match(struct device *dev, void *data)
+{
+	return dev->of_node == data;
+}
+
+static int get_ipu(struct ipu_crtc *ipu_crtc, struct device_node *node)
+{
+	struct device_node *ipu_node;
+	struct device *ipu_dev;
+	int ret;
+
+	ipu_node = of_parse_phandle(node, "ipu", 0);
+	if (!ipu_node) {
+		dev_err(ipu_crtc->dev, "missing ipu phandle!\n");
+		return -ENODEV;
+	}
+
+	ipu_dev = bus_find_device(&platform_bus_type, NULL,
+				  ipu_node, of_dev_node_match);
+	of_node_put(ipu_node);
+
+	if (!ipu_dev) {
+		dev_err(ipu_crtc->dev, "failed to find ipu device!\n");
+		return -ENODEV;
+	}
+
+	device_lock(ipu_dev);
+
+	if (!ipu_dev->driver || !try_module_get(ipu_dev->driver->owner)) {
+		ret = -EPROBE_DEFER;
+		dev_warn(ipu_crtc->dev, "IPU driver not loaded\n");
+		device_unlock(ipu_dev);
+		goto dev_put;
+	}
+
+	ipu_crtc->ipu_dev = ipu_dev;
+	ipu_crtc->ipu = dev_get_drvdata(ipu_dev);
+
+	device_unlock(ipu_dev);
+	return 0;
+dev_put:
+	put_device(ipu_dev);
+	return ret;
+}
+
 static void ipu_put_resources(struct ipu_crtc *ipu_crtc)
 {
 	if (!IS_ERR_OR_NULL(ipu_crtc->dc))
 		ipu_dc_put(ipu_crtc->dc);
 	if (!IS_ERR_OR_NULL(ipu_crtc->di))
 		ipu_di_put(ipu_crtc->di);
+	if (!IS_ERR_OR_NULL(ipu_crtc->ipu_dev)) {
+		module_put(ipu_crtc->ipu_dev->driver->owner);
+		put_device(ipu_crtc->ipu_dev);
+	}
 }
 
 static int ipu_get_resources(struct ipu_crtc *ipu_crtc,
-		struct ipu_client_platformdata *pdata)
+			     struct device_node *np)
 {
-	struct ipu_soc *ipu = dev_get_drvdata(ipu_crtc->dev->parent);
+	u32 di;
 	int ret;
 
-	ipu_crtc->dc = ipu_dc_get(ipu, pdata->dc);
-	if (IS_ERR(ipu_crtc->dc)) {
-		ret = PTR_ERR(ipu_crtc->dc);
+	ret = get_ipu(ipu_crtc, np);
+	if (ret) {
+		dev_warn(ipu_crtc->dev, "could not get ipu\n");
+		return ret;
+	}
+
+	/* get our port */
+	ipu_crtc->port = of_get_child_by_name(np, "port");
+	if (!ipu_crtc->port) {
+		dev_err(ipu_crtc->dev, "could not get port\n");
+		return -ENODEV;
+	}
+
+	ret = of_property_read_u32(np, "di", &di);
+	if (ret < 0)
+		goto err_out;
+
+	ipu_crtc->di = ipu_di_get(ipu_crtc->ipu, di);
+	if (IS_ERR(ipu_crtc->di)) {
+		ret = PTR_ERR(ipu_crtc->di);
 		goto err_out;
 	}
 
-	ipu_crtc->di = ipu_di_get(ipu, pdata->di);
-	if (IS_ERR(ipu_crtc->di)) {
-		ret = PTR_ERR(ipu_crtc->di);
+	if (!of_find_property(np, "dual-plane", NULL)) {
+		dev_info(ipu_crtc->dev, "single plane mode\n");
+		ipu_crtc->ch = &sync_single_plane;
+	} else {
+		dev_info(ipu_crtc->dev, "dual plane mode\n");
+		ipu_crtc->ch = &sync_dual_plane;
+	}
+
+	ipu_crtc->dc = ipu_dc_get(ipu_crtc->ipu, ipu_crtc->ch->dc);
+	if (IS_ERR(ipu_crtc->dc)) {
+		ret = PTR_ERR(ipu_crtc->dc);
 		goto err_out;
 	}
 
@@ -345,14 +461,13 @@ err_out:
 }
 
 static int ipu_crtc_init(struct ipu_crtc *ipu_crtc,
-	struct ipu_client_platformdata *pdata, struct drm_device *drm)
+			 struct drm_device *drm)
 {
-	struct ipu_soc *ipu = dev_get_drvdata(ipu_crtc->dev->parent);
-	int dp = -EINVAL;
+	struct device_node *np = ipu_crtc->dev->of_node;
 	int ret;
 	int id;
 
-	ret = ipu_get_resources(ipu_crtc, pdata);
+	ret = ipu_get_resources(ipu_crtc, np);
 	if (ret) {
 		dev_err(ipu_crtc->dev, "getting resources failed with %d.\n",
 				ret);
@@ -360,17 +475,18 @@ static int ipu_crtc_init(struct ipu_crtc *ipu_crtc,
 	}
 
 	ret = imx_drm_add_crtc(drm, &ipu_crtc->base, &ipu_crtc->imx_crtc,
-			&ipu_crtc_helper_funcs, ipu_crtc->dev->of_node);
+			       &ipu_crtc_helper_funcs, ipu_crtc->port);
 	if (ret) {
 		dev_err(ipu_crtc->dev, "adding crtc failed with %d.\n", ret);
 		goto err_put_resources;
 	}
 
-	if (pdata->dp >= 0)
-		dp = IPU_DP_FLOW_SYNC_BG;
 	id = imx_drm_crtc_id(ipu_crtc->imx_crtc);
-	ipu_crtc->plane[0] = ipu_plane_init(ipu_crtc->base.dev, ipu,
-					    pdata->dma[0], dp, BIT(id), true);
+	ipu_crtc->plane[0] = ipu_plane_init(ipu_crtc->base.dev,
+					    ipu_crtc->ipu,
+					    ipu_crtc->ch->dma[0],
+					    ipu_crtc->ch->dp[0],
+					    BIT(id), true);
 	ret = ipu_plane_get_resources(ipu_crtc->plane[0]);
 	if (ret) {
 		dev_err(ipu_crtc->dev, "getting plane 0 resources failed with %d.\n",
@@ -379,10 +495,11 @@ static int ipu_crtc_init(struct ipu_crtc *ipu_crtc,
 	}
 
 	/* If this crtc is using the DP, add an overlay plane */
-	if (pdata->dp >= 0 && pdata->dma[1] > 0) {
-		ipu_crtc->plane[1] = ipu_plane_init(ipu_crtc->base.dev, ipu,
-						    pdata->dma[1],
-						    IPU_DP_FLOW_SYNC_FG,
+	if (ipu_crtc->ch->dp[1] >= 0) {
+		ipu_crtc->plane[1] = ipu_plane_init(ipu_crtc->base.dev,
+						    ipu_crtc->ipu,
+						    ipu_crtc->ch->dma[1],
+						    ipu_crtc->ch->dp[1],
 						    BIT(id), false);
 		if (IS_ERR(ipu_crtc->plane[1]))
 			ipu_crtc->plane[1] = NULL;
@@ -408,31 +525,8 @@ err_put_resources:
 	return ret;
 }
 
-static struct device_node *ipu_drm_get_port_by_id(struct device_node *parent,
-						  int port_id)
-{
-	struct device_node *port;
-	int id, ret;
-
-	port = of_get_child_by_name(parent, "port");
-	while (port) {
-		ret = of_property_read_u32(port, "reg", &id);
-		if (!ret && id == port_id)
-			return port;
-
-		do {
-			port = of_get_next_child(parent, port);
-			if (!port)
-				return NULL;
-		} while (of_node_cmp(port->name, "port"));
-	}
-
-	return NULL;
-}
-
 static int ipu_drm_bind(struct device *dev, struct device *master, void *data)
 {
-	struct ipu_client_platformdata *pdata = dev->platform_data;
 	struct drm_device *drm = data;
 	struct ipu_crtc *ipu_crtc;
 	int ret;
@@ -443,7 +537,7 @@ static int ipu_drm_bind(struct device *dev, struct device *master, void *data)
 
 	ipu_crtc->dev = dev;
 
-	ret = ipu_crtc_init(ipu_crtc, pdata, drm);
+	ret = ipu_crtc_init(ipu_crtc, drm);
 	if (ret)
 		return ret;
 
@@ -471,22 +565,7 @@ static const struct component_ops ipu_crtc_ops = {
 static int ipu_drm_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
-	struct ipu_client_platformdata *pdata = dev->platform_data;
 	int ret;
-
-	if (!dev->platform_data)
-		return -EINVAL;
-
-	if (!dev->of_node) {
-		/* Associate crtc device with the corresponding DI port node */
-		dev->of_node = ipu_drm_get_port_by_id(dev->parent->of_node,
-						      pdata->di + 2);
-		if (!dev->of_node) {
-			dev_err(dev, "missing port@%d node in %s\n",
-				pdata->di + 2, dev->parent->of_node->full_name);
-			return -ENODEV;
-		}
-	}
 
 	ret = dma_set_coherent_mask(dev, DMA_BIT_MASK(32));
 	if (ret)
@@ -501,9 +580,16 @@ static int ipu_drm_remove(struct platform_device *pdev)
 	return 0;
 }
 
+static struct of_device_id ipu_drm_dt_ids[] = {
+	{ .compatible = "fsl,imx-ipuv3-crtc" },
+	{ /* sentinel */ }
+};
+MODULE_DEVICE_TABLE(of, ipu_drm_dt_ids);
+
 static struct platform_driver ipu_drm_driver = {
 	.driver = {
 		.name = "imx-ipuv3-crtc",
+		.of_match_table = ipu_drm_dt_ids,
 	},
 	.probe = ipu_drm_probe,
 	.remove = ipu_drm_remove,

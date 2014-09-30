@@ -592,37 +592,43 @@ static const struct component_master_ops imx_drm_ops = {
 
 static int imx_drm_platform_probe(struct platform_device *pdev)
 {
-	struct device_node *ep, *port, *remote;
+	struct device_node *ep, *crtc, *port, *remote;
 	struct component_match *match = NULL;
 	int ret;
 	int i;
 
 	/*
-	 * Bind the IPU display interface ports first, so that
-	 * imx_drm_encoder_parse_of called from encoder .bind callbacks
-	 * works as expected.
+	 * Bind the crtcs first, so that imx_drm_encoder_parse_of called
+	 * from encoder .bind callbacks works as expected.
 	 */
 	for (i = 0; ; i++) {
-		port = of_parse_phandle(pdev->dev.of_node, "ports", i);
-		if (!port)
+		crtc = of_parse_phandle(pdev->dev.of_node, "crtcs", i);
+		if (!crtc)
 			break;
 
-		component_match_add(&pdev->dev, &match, compare_of, port);
+		component_match_add(&pdev->dev, &match, compare_of, crtc);
 	}
 
 	if (i == 0) {
-		dev_err(&pdev->dev, "missing 'ports' property\n");
+		dev_err(&pdev->dev, "missing 'crtcs' property\n");
 		return -ENODEV;
 	}
 
 	/* Then bind all encoders */
 	for (i = 0; ; i++) {
-		port = of_parse_phandle(pdev->dev.of_node, "ports", i);
-		if (!port)
+		crtc = of_parse_phandle(pdev->dev.of_node, "crtcs", i);
+		if (!crtc)
 			break;
+
+		port = of_get_child_by_name(crtc, "port");
+		if (!port) {
+			dev_warn(&pdev->dev, "%s has no port\n", crtc->name);
+			continue;
+		}
 
 		for_each_child_of_node(port, ep) {
 			remote = of_graph_get_remote_port_parent(ep);
+
 			if (!remote || !of_device_is_available(remote)) {
 				of_node_put(remote);
 				continue;
@@ -636,7 +642,7 @@ static int imx_drm_platform_probe(struct platform_device *pdev)
 			component_match_add(&pdev->dev, &match, compare_of, remote);
 			of_node_put(remote);
 		}
-		of_node_put(port);
+		of_node_put(crtc);
 	}
 
 	ret = dma_set_coherent_mask(&pdev->dev, DMA_BIT_MASK(32));
