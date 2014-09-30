@@ -385,13 +385,4 @@ int ipu_degrees_to_rot_mode(enum ipu_rotate_mode *mode, int degrees,
 int ipu_rot_mode_to_degrees(int *degrees, enum ipu_rotate_mode mode,
 			    bool hflip, bool vflip);
 
-struct ipu_client_platformdata {
-	int csi;
-	int di;
-	int dc;
-	int dp;
-	int dmfc;
-	int dma[2];
-};
-
 #endif /* __DRM_IPU_H__ */

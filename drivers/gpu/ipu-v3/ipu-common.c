@@ -990,110 +990,6 @@ static void ipu_submodules_exit(struct ipu_soc *ipu)
 	ipu_cpmem_exit(ipu);
 }
 
-static int platform_remove_devices_fn(struct device *dev, void *unused)
-{
-	struct platform_device *pdev = to_platform_device(dev);
-
-	platform_device_unregister(pdev);
-
-	return 0;
-}
-
-static void platform_device_unregister_children(struct platform_device *pdev)
-{
-	device_for_each_child(&pdev->dev, NULL, platform_remove_devices_fn);
-}
-
-struct ipu_platform_reg {
-	struct ipu_client_platformdata pdata;
-	const char *name;
-	int reg_offset;
-};
-
-static const struct ipu_platform_reg client_reg[] = {
-	{
-		.pdata = {
-			.di = 0,
-			.dc = 5,
-			.dp = IPU_DP_FLOW_SYNC_BG,
-			.dma[0] = IPUV3_CHANNEL_MEM_BG_SYNC,
-			.dma[1] = IPUV3_CHANNEL_MEM_FG_SYNC,
-		},
-		.name = "imx-ipuv3-crtc",
-	}, {
-		.pdata = {
-			.di = 1,
-			.dc = 1,
-			.dp = -EINVAL,
-			.dma[0] = IPUV3_CHANNEL_MEM_DC_SYNC,
-			.dma[1] = -EINVAL,
-		},
-		.name = "imx-ipuv3-crtc",
-	}, {
-		.pdata = {
-			.csi = 0,
-			.dma[0] = IPUV3_CHANNEL_CSI0,
-			.dma[1] = -EINVAL,
-		},
-		.reg_offset = IPU_CM_CSI0_REG_OFS,
-		.name = "imx-ipuv3-camera",
-	}, {
-		.pdata = {
-			.csi = 1,
-			.dma[0] = IPUV3_CHANNEL_CSI1,
-			.dma[1] = -EINVAL,
-		},
-		.reg_offset = IPU_CM_CSI1_REG_OFS,
-		.name = "imx-ipuv3-camera",
-	},
-};
-
-static DEFINE_MUTEX(ipu_client_id_mutex);
-static int ipu_client_id;
-
-static int ipu_add_client_devices(struct ipu_soc *ipu, unsigned long ipu_base)
-{
-	struct device *dev = ipu->dev;
-	unsigned i;
-	int id, ret;
-
-	mutex_lock(&ipu_client_id_mutex);
-	id = ipu_client_id;
-	ipu_client_id += ARRAY_SIZE(client_reg);
-	mutex_unlock(&ipu_client_id_mutex);
-
-	for (i = 0; i < ARRAY_SIZE(client_reg); i++) {
-		const struct ipu_platform_reg *reg = &client_reg[i];
-		struct platform_device *pdev;
-		struct resource res;
-
-		if (reg->reg_offset) {
-			memset(&res, 0, sizeof(res));
-			res.flags = IORESOURCE_MEM;
-			res.start = ipu_base + ipu->devtype->cm_ofs + reg->reg_offset;
-			res.end = res.start + PAGE_SIZE - 1;
-			pdev = platform_device_register_resndata(dev, reg->name,
-				id++, &res, 1, &reg->pdata, sizeof(reg->pdata));
-		} else {
-			pdev = platform_device_register_data(dev, reg->name,
-				id++, &reg->pdata, sizeof(reg->pdata));
-		}
-
-		if (IS_ERR(pdev)) {
-			ret = PTR_ERR(pdev);
-			goto err_register;
-		}
-	}
-
-	return 0;
-
-err_register:
-	platform_device_unregister_children(to_platform_device(dev));
-
-	return ret;
-}
-
-
 static int ipu_irq_init(struct ipu_soc *ipu)
 {
 	struct irq_chip_generic *gc;
@@ -1318,19 +1214,10 @@ static int ipu_probe(struct platform_device *pdev)
 	if (ret)
 		goto failed_submodules_init;
 
-	ret = ipu_add_client_devices(ipu, ipu_base);
-	if (ret) {
-		dev_err(&pdev->dev, "adding client devices failed with %d\n",
-				ret);
-		goto failed_add_clients;
-	}
-
 	dev_info(&pdev->dev, "%s probed\n", devtype->name);
 
 	return 0;
 
-failed_add_clients:
-	ipu_submodules_exit(ipu);
 failed_submodules_init:
 out_failed_reset:
 	ipu_irq_exit(ipu);
@@ -1343,7 +1230,6 @@ static int ipu_remove(struct platform_device *pdev)
 {
 	struct ipu_soc *ipu = platform_get_drvdata(pdev);
 
-	platform_device_unregister_children(pdev);
 	ipu_submodules_exit(ipu);
 	ipu_irq_exit(ipu);
 
