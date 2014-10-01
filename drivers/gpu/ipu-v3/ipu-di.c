@@ -402,12 +402,105 @@ static void ipu_di_sync_config_noninterlaced(struct ipu_di *di,
 		ipu_di_sync_config(di, cfg_vga, 0, ARRAY_SIZE(cfg_vga));
 }
 
-static void ipu_di_config_clock(struct ipu_di *di,
-	const struct ipu_di_signal_cfg *sig)
+
+/*
+ * We need to use the DI divider. We should really have a flag here
+ * indicating whether the bridge can cope with a fractional divider
+ * or not.
+ *
+ * For now, assume the chip bug exists in the fractional divider
+ * which causes bad DI pixel clock waveforms for all values of the
+ * fractional part other than 0 (no fraction) or 0x8 (0.5). So this
+ * function returns a divider with only 0x0 or 0x8 in the fractional
+ * part.
+ *
+ * This function reprograms the clock rate of the parent-parent of
+ * the DI clock in order to get as close as possible to the requested
+ * pixel clock. It calculates two values for the parent-parent rate: a
+ * rate that is a whole integer multiple of the pixel clock, and a rate
+ * that is a half-integer multiple. It then programs whichever rate
+ * comes closest to generating the desired rate, and returns the
+ * corresponding integer or half-integer divider (times 16).
+ */
+static int set_di_pre_clk_rate(struct ipu_di *di,
+			       const struct ipu_di_signal_cfg *sig)
+{
+	struct clk *di_pre_clk;
+	unsigned long pre_clk_N_round, pre_clk_N_0_5_round;
+	unsigned long pre_clk_N, pre_clk_N_0_5;
+	unsigned long pixclk_N, pixclk_N_0_5;
+	unsigned div_N, div_N_0_5, error_N, error_N_0_5;
+	int ret;
+
+	di_pre_clk = clk_get_parent(clk_get_parent(di->clk_di));
+	if (IS_ERR(di_pre_clk)) {
+		dev_err(di->ipu->dev, "failed to get di_pre clock\n");
+		return PTR_ERR(di_pre_clk);
+	}
+
+	/*
+	 * calc pre_clk_N and pre_clk_N_0_5, which are an integer multiple
+	 * and half-integer multiple of sig->mode.pixelclock, respectively.
+	 */
+	pre_clk_N = sig->mode.pixelclock;
+	pre_clk_N_round = clk_round_rate(di_pre_clk, pre_clk_N);
+	pre_clk_N *= (pre_clk_N_round / pre_clk_N);
+	pre_clk_N_0_5 = pre_clk_N + sig->mode.pixelclock / 2;
+
+	if (pre_clk_N < pre_clk_N_round)
+		pre_clk_N += sig->mode.pixelclock;
+	if (pre_clk_N_0_5 < pre_clk_N_round)
+		pre_clk_N_0_5 += sig->mode.pixelclock;
+
+	/*
+	 * now get the rounded pre_clk_N and pre_clk_N_0_5, i.e. what the
+	 * pre-clk can actually generate.
+	 */
+	pre_clk_N_round = clk_round_rate(di_pre_clk, pre_clk_N);
+	pre_clk_N_0_5_round = clk_round_rate(di_pre_clk, pre_clk_N_0_5);
+
+	/*
+	 * finally we can determine whether the integer multiple or
+	 * half-integer multiple pre-clk comes closest to generating
+	 * the desired pixel clock. Set pre-clk rate to whichever comes
+	 * closest.
+	 */
+	div_N = (pre_clk_N_round << 4) / sig->mode.pixelclock;
+	div_N = (div_N + 0x8) & ~0xf; /* round to nearest int */
+	pixclk_N = (pre_clk_N_round << 4) / div_N;
+
+	div_N_0_5 = (pre_clk_N_0_5_round << 4) / sig->mode.pixelclock;
+	div_N_0_5 = (div_N_0_5 + 0x4) & ~0x7; /* round to nearest half-int */
+	pixclk_N_0_5 = (pre_clk_N_0_5_round << 4) / div_N_0_5;
+
+	error_N = pixclk_N / (sig->mode.pixelclock / 1000);
+	error_N_0_5 = pixclk_N_0_5 / (sig->mode.pixelclock / 1000);
+
+	if (abs(error_N - 1000) < abs(error_N_0_5 - 1000)) {
+		ret = div_N;
+		clk_set_rate(di_pre_clk, pre_clk_N_round);
+	} else {
+		ret = div_N_0_5;
+		clk_set_rate(di_pre_clk, pre_clk_N_0_5_round);
+	}
+
+	dev_dbg(di->ipu->dev,
+		"di%d: pixclk want %lu, can do %lu / %lu, div 0x%02x / 0x%02x, error %d.%u%% / %d.%u%%\n",
+		di->id, sig->mode.pixelclock, pixclk_N, pixclk_N_0_5,
+		div_N, div_N_0_5,
+		(signed)(error_N - 1000) / 10, error_N % 10,
+		(signed)(error_N_0_5 - 1000) / 10, error_N_0_5 % 10);
+
+	return ret;
+}
+
+static int ipu_di_config_clock(struct ipu_di *di,
+			       const struct ipu_di_signal_cfg *sig)
 {
 	struct clk *clk;
 	unsigned clkgen0;
 	uint32_t val;
+	int ret;
 
 	if (sig->clkflags & IPU_DI_CLKMODE_EXT) {
 		/*
@@ -427,25 +520,10 @@ static void ipu_di_config_clock(struct ipu_di *di,
 			 */
 			clkgen0 = 1 << 4;
 		} else {
-			/*
-			 * We can use the divider.  We should really have
-			 * a flag here indicating whether the bridge can
-			 * cope with a fractional divider or not.  For the
-			 * time being, let's go for simplicitly and
-			 * reliability.
-			 */
-			unsigned long in_rate;
-			unsigned div;
-
-			clk_set_rate(clk, sig->mode.pixelclock);
-
-			in_rate = clk_get_rate(clk);
-			div = (in_rate + sig->mode.pixelclock / 2) /
-				sig->mode.pixelclock;
-			if (div == 0)
-				div = 1;
-
-			clkgen0 = div << 4;
+			ret = set_di_pre_clk_rate(di, sig);
+			if (ret < 0)
+				return ret;
+			clkgen0 = ret;
 		}
 	} else {
 		/*
@@ -474,20 +552,12 @@ static void ipu_di_config_clock(struct ipu_di *di,
 
 			clkgen0 = div << 4;
 		} else {
-			unsigned long in_rate;
-			unsigned div;
-
 			clk = di->clk_di;
 
-			clk_set_rate(clk, sig->mode.pixelclock);
-
-			in_rate = clk_get_rate(clk);
-			div = (in_rate + sig->mode.pixelclock / 2) /
-				sig->mode.pixelclock;
-			if (div == 0)
-				div = 1;
-
-			clkgen0 = div << 4;
+			ret = set_di_pre_clk_rate(di, sig);
+			if (ret < 0)
+				return ret;
+			clkgen0 = ret;
 		}
 	}
 
@@ -516,6 +586,8 @@ static void ipu_di_config_clock(struct ipu_di *di,
 		clk_get_rate(di->clk_di),
 		clk == di->clk_di ? "DI" : "IPU",
 		clk_get_rate(di->clk_di_pixel) / (clkgen0 >> 4));
+
+	return 0;
 }
 
 /*
@@ -552,6 +624,7 @@ int ipu_di_init_sync_panel(struct ipu_di *di, struct ipu_di_signal_cfg *sig)
 	u32 reg;
 	u32 di_gen, vsync_cnt;
 	u32 div;
+	int ret = 0;
 
 	dev_dbg(di->ipu->dev, "disp %d: panel size = %d x %d\n",
 		di->id, sig->mode.hactive, sig->mode.vactive);
@@ -566,7 +639,9 @@ int ipu_di_init_sync_panel(struct ipu_di *di, struct ipu_di_signal_cfg *sig)
 
 	mutex_lock(&di_mutex);
 
-	ipu_di_config_clock(di, sig);
+	ret = ipu_di_config_clock(di, sig);
+	if (ret)
+		goto unlock;
 
 	div = ipu_di_read(di, DI_BS_CLKGEN0) & 0xfff;
 	div = div / 16;		/* Now divider is integer portion */
@@ -643,9 +718,9 @@ int ipu_di_init_sync_panel(struct ipu_di *di, struct ipu_di_signal_cfg *sig)
 
 	ipu_di_write(di, reg, DI_POL);
 
+unlock:
 	mutex_unlock(&di_mutex);
-
-	return 0;
+	return ret;
 }
 EXPORT_SYMBOL_GPL(ipu_di_init_sync_panel);
 
