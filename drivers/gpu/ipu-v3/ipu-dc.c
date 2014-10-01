@@ -102,6 +102,10 @@ static struct ipu_dc_if_map predef_maps[] = {
 		.v4l2_fmt = v4l2_fourcc('G', 'B', 'R', '3'),
 	}, {
 		.src_mask = {0xfc, 0xfc, 0xfc},
+		.dest_msb = {5, 11, 17},
+		.v4l2_fmt = v4l2_fourcc('R', 'G', 'B', 'H'),
+	}, {
+		.src_mask = {0xfc, 0xfc, 0xfc},
 		.dest_msb = {17, 11, 5},
 		.v4l2_fmt = V4L2_PIX_FMT_BGR666,
 	}, {
