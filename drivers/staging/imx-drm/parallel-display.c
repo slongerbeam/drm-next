@@ -230,6 +230,13 @@ static int imx_pd_bind(struct device *dev, struct device *master, void *data)
 		else if (!strcmp(fmt, "lvds666"))
 			imxpd->interface_pix_fmt =
 					v4l2_fourcc('L', 'V', 'D', '6');
+		else if (!strcmp(fmt, "rgb18"))
+			imxpd->interface_pix_fmt =
+					v4l2_fourcc('R', 'G', 'B', 'H');
+		else {
+			dev_err(dev, "Unsupported interface pix_fmt!\n");
+			return -EINVAL;
+		}
 	}
 
 	panel_node = of_parse_phandle(np, "fsl,panel", 0);
