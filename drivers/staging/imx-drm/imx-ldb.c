@@ -85,6 +85,11 @@ struct imx_ldb {
 	const struct bus_mux *lvds_mux;
 };
 
+#define imx_ldb_dbg(ch, fmt, args...)					\
+	dev_dbg((ch)->ldb->dev, "lvds%d: " fmt, (ch)->chno, ##args)
+#define imx_ldb_entry_dbg(ch)			\
+	imx_ldb_dbg((ch), "%s\n", __func__)
+
 static enum drm_connector_status imx_ldb_connector_detect(
 		struct drm_connector *connector, bool force)
 {
@@ -95,6 +100,8 @@ static int imx_ldb_connector_get_modes(struct drm_connector *connector)
 {
 	struct imx_ldb_channel *imx_ldb_ch = con_to_imx_ldb_ch(connector);
 	int num_modes = 0;
+
+	imx_ldb_entry_dbg(imx_ldb_ch);
 
 	if (imx_ldb_ch->edid) {
 		drm_mode_connector_update_edid_property(connector,
@@ -127,6 +134,9 @@ static struct drm_encoder *imx_ldb_connector_best_encoder(
 
 static void imx_ldb_encoder_dpms(struct drm_encoder *encoder, int mode)
 {
+	struct imx_ldb_channel *imx_ldb_ch = enc_to_imx_ldb_ch(encoder);
+
+	imx_ldb_dbg(imx_ldb_ch, "%s: %s\n", __func__, mode ? "OFF" : "ON");
 }
 
 static bool imx_ldb_encoder_mode_fixup(struct drm_encoder *encoder,
@@ -139,22 +149,22 @@ static bool imx_ldb_encoder_mode_fixup(struct drm_encoder *encoder,
 static void imx_ldb_set_clock(struct imx_ldb *ldb, int mux, int chno,
 		unsigned long serial_clk, unsigned long di_clk)
 {
+	struct imx_ldb_channel *imx_ldb_ch = &ldb->channel[chno];
 	int ret;
 
-	dev_dbg(ldb->dev, "%s: now: %ld want: %ld\n", __func__,
-			clk_get_rate(ldb->clk_pll[chno]), serial_clk);
+	imx_ldb_dbg(imx_ldb_ch, "%s: now: %ld want: %ld\n", __func__,
+		    clk_get_rate(ldb->clk_pll[chno]), serial_clk);
 	clk_set_rate(ldb->clk_pll[chno], serial_clk);
 
-	dev_dbg(ldb->dev, "%s after: %ld\n", __func__,
-			clk_get_rate(ldb->clk_pll[chno]));
+	imx_ldb_dbg(imx_ldb_ch, "%s after: %ld\n", __func__,
+		    clk_get_rate(ldb->clk_pll[chno]));
 
-	dev_dbg(ldb->dev, "%s: now: %ld want: %ld\n", __func__,
-			clk_get_rate(ldb->clk[chno]),
-			(long int)di_clk);
+	imx_ldb_dbg(imx_ldb_ch, "%s: now: %ld want: %ld\n", __func__,
+		    clk_get_rate(ldb->clk[chno]), (long int)di_clk);
 	clk_set_rate(ldb->clk[chno], di_clk);
 
-	dev_dbg(ldb->dev, "%s after: %ld\n", __func__,
-			clk_get_rate(ldb->clk[chno]));
+	imx_ldb_dbg(imx_ldb_ch, "%s after: %ld\n", __func__,
+		    clk_get_rate(ldb->clk[chno]));
 
 	/* set display clock mux to LDB input clock */
 	ret = clk_set_parent(ldb->clk_sel[mux], ldb->clk[chno]);
@@ -173,6 +183,8 @@ static void imx_ldb_encoder_prepare(struct drm_encoder *encoder)
 	unsigned long serial_clk;
 	unsigned long di_clk = mode->clock * 1000;
 	int mux = imx_drm_encoder_get_mux_id(imx_ldb_ch->child, encoder);
+
+	imx_ldb_entry_dbg(imx_ldb_ch);
 
 	if (ldb->ldb_ctrl & LDB_SPLIT_MODE_EN) {
 		/* dual channel LVDS mode */
@@ -209,6 +221,8 @@ static void imx_ldb_encoder_commit(struct drm_encoder *encoder)
 	struct imx_ldb *ldb = imx_ldb_ch->ldb;
 	int dual = ldb->ldb_ctrl & LDB_SPLIT_MODE_EN;
 	int mux = imx_drm_encoder_get_mux_id(imx_ldb_ch->child, encoder);
+
+	imx_ldb_entry_dbg(imx_ldb_ch);
 
 	if (dual) {
 		clk_prepare_enable(ldb->clk[0]);
@@ -253,6 +267,8 @@ static void imx_ldb_encoder_mode_set(struct drm_encoder *encoder,
 	struct imx_ldb *ldb = imx_ldb_ch->ldb;
 	int dual = ldb->ldb_ctrl & LDB_SPLIT_MODE_EN;
 
+	imx_ldb_entry_dbg(imx_ldb_ch);
+
 	if (mode->clock > 170000) {
 		dev_warn(ldb->dev,
 			 "%s: mode exceeds 170 MHz pixel clock\n", __func__);
@@ -281,6 +297,8 @@ static void imx_ldb_encoder_disable(struct drm_encoder *encoder)
 {
 	struct imx_ldb_channel *imx_ldb_ch = enc_to_imx_ldb_ch(encoder);
 	struct imx_ldb *ldb = imx_ldb_ch->ldb;
+
+	imx_ldb_entry_dbg(imx_ldb_ch);
 
 	/*
 	 * imx_ldb_encoder_disable is called by
