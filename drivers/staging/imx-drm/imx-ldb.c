@@ -132,11 +132,86 @@ static struct drm_encoder *imx_ldb_connector_best_encoder(
 	return &imx_ldb_ch->encoder;
 }
 
+static void imx_ldb_poweroff(struct imx_ldb_channel *imx_ldb_ch)
+{
+	struct imx_ldb *ldb = imx_ldb_ch->ldb;
+	int dual = ldb->ldb_ctrl & LDB_SPLIT_MODE_EN;
+	int chno = imx_ldb_ch->chno;
+
+	if ((chno == 0 && (ldb->ldb_ctrl & LDB_CH0_MODE_EN_MASK) == 0) ||
+	    (chno == 1 && (ldb->ldb_ctrl & LDB_CH1_MODE_EN_MASK) == 0))
+		return;
+
+	ldb->ldb_ctrl &= (chno == 0) ?
+		~LDB_CH0_MODE_EN_MASK : ~LDB_CH1_MODE_EN_MASK;
+
+	regmap_write(ldb->regmap, IOMUXC_GPR2, ldb->ldb_ctrl);
+
+	if (dual) {
+		clk_disable_unprepare(ldb->clk[0]);
+		clk_disable_unprepare(ldb->clk[1]);
+	} else
+		clk_disable_unprepare(ldb->clk[chno]);
+}
+
+static void imx_ldb_poweron(struct imx_ldb_channel *imx_ldb_ch)
+{
+	struct imx_ldb *ldb = imx_ldb_ch->ldb;
+	int dual = ldb->ldb_ctrl & LDB_SPLIT_MODE_EN;
+	int chno = imx_ldb_ch->chno;
+	int mux = imx_drm_encoder_get_mux_id(imx_ldb_ch->child,
+					     &imx_ldb_ch->encoder);
+
+	if ((chno == 0 && (ldb->ldb_ctrl & LDB_CH0_MODE_EN_MASK)) ||
+	    (chno == 1 && (ldb->ldb_ctrl & LDB_CH1_MODE_EN_MASK)))
+		return;
+
+	if (dual) {
+		clk_prepare_enable(ldb->clk[0]);
+		clk_prepare_enable(ldb->clk[1]);
+	} else
+		clk_prepare_enable(ldb->clk[chno]);
+
+	if (chno == 0 || dual) {
+		ldb->ldb_ctrl &= ~LDB_CH0_MODE_EN_MASK;
+		if (mux == 0 || ldb->lvds_mux)
+			ldb->ldb_ctrl |= LDB_CH0_MODE_EN_TO_DI0;
+		else if (mux == 1)
+			ldb->ldb_ctrl |= LDB_CH0_MODE_EN_TO_DI1;
+	}
+	if (chno == 1 || dual) {
+		ldb->ldb_ctrl &= ~LDB_CH1_MODE_EN_MASK;
+		if (mux == 1 || ldb->lvds_mux)
+			ldb->ldb_ctrl |= LDB_CH1_MODE_EN_TO_DI1;
+		else if (mux == 0)
+			ldb->ldb_ctrl |= LDB_CH1_MODE_EN_TO_DI0;
+	}
+
+	if (ldb->lvds_mux) {
+		const struct bus_mux *lvds_mux = NULL;
+
+		if (chno == 0)
+			lvds_mux = &ldb->lvds_mux[0];
+		else if (chno == 1)
+			lvds_mux = &ldb->lvds_mux[1];
+
+		regmap_update_bits(ldb->regmap, lvds_mux->reg, lvds_mux->mask,
+				   mux << lvds_mux->shift);
+	}
+
+	regmap_write(ldb->regmap, IOMUXC_GPR2, ldb->ldb_ctrl);
+}
+
 static void imx_ldb_encoder_dpms(struct drm_encoder *encoder, int mode)
 {
 	struct imx_ldb_channel *imx_ldb_ch = enc_to_imx_ldb_ch(encoder);
 
 	imx_ldb_dbg(imx_ldb_ch, "%s: %s\n", __func__, mode ? "OFF" : "ON");
+
+	if (mode)
+		imx_ldb_poweroff(imx_ldb_ch);
+	else
+		imx_ldb_poweron(imx_ldb_ch);
 }
 
 static bool imx_ldb_encoder_mode_fixup(struct drm_encoder *encoder,
@@ -186,6 +261,8 @@ static void imx_ldb_encoder_prepare(struct drm_encoder *encoder)
 
 	imx_ldb_entry_dbg(imx_ldb_ch);
 
+	imx_ldb_poweroff(imx_ldb_ch);
+
 	if (ldb->ldb_ctrl & LDB_SPLIT_MODE_EN) {
 		/* dual channel LVDS mode */
 		serial_clk = 3500UL * mode->clock;
@@ -218,45 +295,10 @@ static void imx_ldb_encoder_prepare(struct drm_encoder *encoder)
 static void imx_ldb_encoder_commit(struct drm_encoder *encoder)
 {
 	struct imx_ldb_channel *imx_ldb_ch = enc_to_imx_ldb_ch(encoder);
-	struct imx_ldb *ldb = imx_ldb_ch->ldb;
-	int dual = ldb->ldb_ctrl & LDB_SPLIT_MODE_EN;
-	int mux = imx_drm_encoder_get_mux_id(imx_ldb_ch->child, encoder);
 
 	imx_ldb_entry_dbg(imx_ldb_ch);
 
-	if (dual) {
-		clk_prepare_enable(ldb->clk[0]);
-		clk_prepare_enable(ldb->clk[1]);
-	}
-
-	if (imx_ldb_ch == &ldb->channel[0] || dual) {
-		ldb->ldb_ctrl &= ~LDB_CH0_MODE_EN_MASK;
-		if (mux == 0 || ldb->lvds_mux)
-			ldb->ldb_ctrl |= LDB_CH0_MODE_EN_TO_DI0;
-		else if (mux == 1)
-			ldb->ldb_ctrl |= LDB_CH0_MODE_EN_TO_DI1;
-	}
-	if (imx_ldb_ch == &ldb->channel[1] || dual) {
-		ldb->ldb_ctrl &= ~LDB_CH1_MODE_EN_MASK;
-		if (mux == 1 || ldb->lvds_mux)
-			ldb->ldb_ctrl |= LDB_CH1_MODE_EN_TO_DI1;
-		else if (mux == 0)
-			ldb->ldb_ctrl |= LDB_CH1_MODE_EN_TO_DI0;
-	}
-
-	if (ldb->lvds_mux) {
-		const struct bus_mux *lvds_mux = NULL;
-
-		if (imx_ldb_ch == &ldb->channel[0])
-			lvds_mux = &ldb->lvds_mux[0];
-		else if (imx_ldb_ch == &ldb->channel[1])
-			lvds_mux = &ldb->lvds_mux[1];
-
-		regmap_update_bits(ldb->regmap, lvds_mux->reg, lvds_mux->mask,
-				   mux << lvds_mux->shift);
-	}
-
-	regmap_write(ldb->regmap, IOMUXC_GPR2, ldb->ldb_ctrl);
+	imx_ldb_poweron(imx_ldb_ch);
 }
 
 static void imx_ldb_encoder_mode_set(struct drm_encoder *encoder,
@@ -296,33 +338,10 @@ static void imx_ldb_encoder_mode_set(struct drm_encoder *encoder,
 static void imx_ldb_encoder_disable(struct drm_encoder *encoder)
 {
 	struct imx_ldb_channel *imx_ldb_ch = enc_to_imx_ldb_ch(encoder);
-	struct imx_ldb *ldb = imx_ldb_ch->ldb;
 
 	imx_ldb_entry_dbg(imx_ldb_ch);
 
-	/*
-	 * imx_ldb_encoder_disable is called by
-	 * drm_helper_disable_unused_functions without
-	 * the encoder being enabled before.
-	 */
-	if (imx_ldb_ch == &ldb->channel[0] &&
-	    (ldb->ldb_ctrl & LDB_CH0_MODE_EN_MASK) == 0)
-		return;
-	else if (imx_ldb_ch == &ldb->channel[1] &&
-		 (ldb->ldb_ctrl & LDB_CH1_MODE_EN_MASK) == 0)
-		return;
-
-	if (imx_ldb_ch == &ldb->channel[0])
-		ldb->ldb_ctrl &= ~LDB_CH0_MODE_EN_MASK;
-	else if (imx_ldb_ch == &ldb->channel[1])
-		ldb->ldb_ctrl &= ~LDB_CH1_MODE_EN_MASK;
-
-	regmap_write(ldb->regmap, IOMUXC_GPR2, ldb->ldb_ctrl);
-
-	if (ldb->ldb_ctrl & LDB_SPLIT_MODE_EN) {
-		clk_disable_unprepare(ldb->clk[0]);
-		clk_disable_unprepare(ldb->clk[1]);
-	}
+	imx_ldb_poweroff(imx_ldb_ch);
 }
 
 static struct drm_connector_funcs imx_ldb_connector_funcs = {
