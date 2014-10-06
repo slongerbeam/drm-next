@@ -205,12 +205,12 @@ void ipu_cpmem_set_rotation(struct ipuv3_channel *ch,
 int ipu_cpmem_set_format_rgb(struct ipuv3_channel *ch,
 			     const struct ipu_rgb *rgb);
 int ipu_cpmem_set_format_passthrough(struct ipuv3_channel *ch, int width);
-void ipu_cpmem_set_yuv_interleaved(struct ipuv3_channel *ch, u32 pixel_format);
+void ipu_cpmem_set_yuv_interleaved(struct ipuv3_channel *ch, u32 drm_fourcc);
 void ipu_cpmem_set_yuv_planar_full(struct ipuv3_channel *ch,
-				   u32 pixel_format, int stride,
+				   u32 drm_fourcc, int stride,
 				   int u_offset, int v_offset);
 void ipu_cpmem_set_yuv_planar(struct ipuv3_channel *ch,
-			      u32 pixel_format, int stride, int height);
+			      u32 drm_fourcc, int stride, int height);
 int ipu_cpmem_set_fmt(struct ipuv3_channel *ch, u32 drm_fourcc);
 int ipu_cpmem_set_image(struct ipuv3_channel *ch, struct ipu_image *image);
 void ipu_cpmem_dump(struct ipuv3_channel *ch);

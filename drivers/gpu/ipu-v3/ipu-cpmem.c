@@ -384,15 +384,15 @@ int ipu_cpmem_set_format_passthrough(struct ipuv3_channel *ch, int width)
 }
 EXPORT_SYMBOL_GPL(ipu_cpmem_set_format_passthrough);
 
-void ipu_cpmem_set_yuv_interleaved(struct ipuv3_channel *ch, u32 pixel_format)
+void ipu_cpmem_set_yuv_interleaved(struct ipuv3_channel *ch, u32 drm_fourcc)
 {
-	switch (pixel_format) {
-	case V4L2_PIX_FMT_UYVY:
+	switch (drm_fourcc) {
+	case DRM_FORMAT_UYVY:
 		ipu_ch_param_write_field(ch, IPU_FIELD_BPP, 3); /* bits/pixel */
 		ipu_ch_param_write_field(ch, IPU_FIELD_PFS, 0xA);/* pix fmt */
 		ipu_ch_param_write_field(ch, IPU_FIELD_NPB, 31);/* burst size */
 		break;
-	case V4L2_PIX_FMT_YUYV:
+	case DRM_FORMAT_YUYV:
 		ipu_ch_param_write_field(ch, IPU_FIELD_BPP, 3); /* bits/pixel */
 		ipu_ch_param_write_field(ch, IPU_FIELD_PFS, 0x8);/* pix fmt */
 		ipu_ch_param_write_field(ch, IPU_FIELD_NPB, 31);/* burst size */
@@ -402,23 +402,23 @@ void ipu_cpmem_set_yuv_interleaved(struct ipuv3_channel *ch, u32 pixel_format)
 EXPORT_SYMBOL_GPL(ipu_cpmem_set_yuv_interleaved);
 
 void ipu_cpmem_set_yuv_planar_full(struct ipuv3_channel *ch,
-				   u32 pixel_format, int stride,
+				   u32 drm_fourcc, int stride,
 				   int u_offset, int v_offset)
 {
-	switch (pixel_format) {
-	case V4L2_PIX_FMT_YUV420:
-	case V4L2_PIX_FMT_YUV422P:
+	switch (drm_fourcc) {
+	case DRM_FORMAT_YUV420:
+	case DRM_FORMAT_YUV422:
 		ipu_ch_param_write_field(ch, IPU_FIELD_SLUV, (stride / 2) - 1);
 		ipu_ch_param_write_field(ch, IPU_FIELD_UBO, u_offset / 8);
 		ipu_ch_param_write_field(ch, IPU_FIELD_VBO, v_offset / 8);
 		break;
-	case V4L2_PIX_FMT_YVU420:
+	case DRM_FORMAT_YVU420:
 		ipu_ch_param_write_field(ch, IPU_FIELD_SLUV, (stride / 2) - 1);
 		ipu_ch_param_write_field(ch, IPU_FIELD_UBO, v_offset / 8);
 		ipu_ch_param_write_field(ch, IPU_FIELD_VBO, u_offset / 8);
 		break;
-	case V4L2_PIX_FMT_NV12:
-	case V4L2_PIX_FMT_NV16:
+	case DRM_FORMAT_NV12:
+	case DRM_FORMAT_NV16:
 		ipu_ch_param_write_field(ch, IPU_FIELD_SLUV, stride - 1);
 		ipu_ch_param_write_field(ch, IPU_FIELD_UBO, u_offset / 8);
 		ipu_ch_param_write_field(ch, IPU_FIELD_VBO, u_offset / 8);
@@ -427,32 +427,32 @@ void ipu_cpmem_set_yuv_planar_full(struct ipuv3_channel *ch,
 }
 EXPORT_SYMBOL_GPL(ipu_cpmem_set_yuv_planar_full);
 
-void ipu_cpmem_set_yuv_planar(struct ipuv3_channel *ch,
-			      u32 pixel_format, int stride, int height)
+void ipu_cpmem_set_yuv_planar(struct ipuv3_channel *ch, u32 drm_fourcc,
+			      int stride, int height)
 {
 	int u_offset, v_offset;
 	int uv_stride = 0;
 
-	switch (pixel_format) {
-	case V4L2_PIX_FMT_YUV420:
-	case V4L2_PIX_FMT_YVU420:
+	switch (drm_fourcc) {
+	case DRM_FORMAT_YUV420:
+	case DRM_FORMAT_YVU420:
 		uv_stride = stride / 2;
 		u_offset = stride * height;
 		v_offset = u_offset + (uv_stride * height / 2);
-		ipu_cpmem_set_yuv_planar_full(ch, pixel_format, stride,
+		ipu_cpmem_set_yuv_planar_full(ch, drm_fourcc, stride,
 					      u_offset, v_offset);
 		break;
-	case V4L2_PIX_FMT_YUV422P:
+	case DRM_FORMAT_YUV422:
 		uv_stride = stride / 2;
 		u_offset = stride * height;
 		v_offset = u_offset + (uv_stride * height);
-		ipu_cpmem_set_yuv_planar_full(ch, pixel_format, stride,
+		ipu_cpmem_set_yuv_planar_full(ch, drm_fourcc, stride,
 					      u_offset, v_offset);
 		break;
-	case V4L2_PIX_FMT_NV12:
-	case V4L2_PIX_FMT_NV16:
+	case DRM_FORMAT_NV12:
+	case DRM_FORMAT_NV16:
 		u_offset = stride * height;
-		ipu_cpmem_set_yuv_planar_full(ch, pixel_format, stride,
+		ipu_cpmem_set_yuv_planar_full(ch, drm_fourcc, stride,
 					      u_offset, 0);
 		break;
 	}
@@ -600,73 +600,76 @@ int ipu_cpmem_set_image(struct ipuv3_channel *ch, struct ipu_image *image)
 {
 	struct v4l2_pix_format *pix = &image->pix;
 	int offset, u_offset, v_offset;
+	u32 drm_fourcc;
 
 	pr_debug("%s: resolution: %dx%d stride: %d\n",
 		 __func__, pix->width, pix->height,
 		 pix->bytesperline);
 
+	drm_fourcc = v4l2_pix_fmt_to_drm_fourcc(pix->pixelformat);
+
 	ipu_cpmem_set_resolution(ch, image->rect.width, image->rect.height);
 	ipu_cpmem_set_stride(ch, pix->bytesperline);
 
-	ipu_cpmem_set_fmt(ch, v4l2_pix_fmt_to_drm_fourcc(pix->pixelformat));
+	ipu_cpmem_set_fmt(ch, drm_fourcc);
 
-	switch (pix->pixelformat) {
-	case V4L2_PIX_FMT_YUV420:
-	case V4L2_PIX_FMT_YVU420:
+	switch (drm_fourcc) {
+	case DRM_FORMAT_YUV420:
+	case DRM_FORMAT_YVU420:
 		offset = Y_OFFSET(pix, image->rect.left, image->rect.top);
 		u_offset = U_OFFSET(pix, image->rect.left,
 				    image->rect.top) - offset;
 		v_offset = V_OFFSET(pix, image->rect.left,
 				    image->rect.top) - offset;
 
-		ipu_cpmem_set_yuv_planar_full(ch, pix->pixelformat,
+		ipu_cpmem_set_yuv_planar_full(ch, drm_fourcc,
 					      pix->bytesperline,
 					      u_offset, v_offset);
 		break;
-	case V4L2_PIX_FMT_YUV422P:
+	case DRM_FORMAT_YUV422:
 		offset = Y_OFFSET(pix, image->rect.left, image->rect.top);
 		u_offset = U2_OFFSET(pix, image->rect.left,
 				     image->rect.top) - offset;
 		v_offset = V2_OFFSET(pix, image->rect.left,
 				     image->rect.top) - offset;
 
-		ipu_cpmem_set_yuv_planar_full(ch, pix->pixelformat,
+		ipu_cpmem_set_yuv_planar_full(ch, drm_fourcc,
 					      pix->bytesperline,
 					      u_offset, v_offset);
 		break;
-	case V4L2_PIX_FMT_NV12:
+	case DRM_FORMAT_NV12:
 		offset = Y_OFFSET(pix, image->rect.left, image->rect.top);
 		u_offset = UV_OFFSET(pix, image->rect.left,
 				     image->rect.top) - offset;
 		v_offset = 0;
 
-		ipu_cpmem_set_yuv_planar_full(ch, pix->pixelformat,
+		ipu_cpmem_set_yuv_planar_full(ch, drm_fourcc,
 					      pix->bytesperline,
 					      u_offset, v_offset);
 		break;
-	case V4L2_PIX_FMT_NV16:
+	case DRM_FORMAT_NV16:
 		offset = Y_OFFSET(pix, image->rect.left, image->rect.top);
 		u_offset = UV2_OFFSET(pix, image->rect.left,
 				      image->rect.top) - offset;
 		v_offset = 0;
 
-		ipu_cpmem_set_yuv_planar_full(ch, pix->pixelformat,
+		ipu_cpmem_set_yuv_planar_full(ch, drm_fourcc,
 					      pix->bytesperline,
 					      u_offset, v_offset);
 		break;
-	case V4L2_PIX_FMT_UYVY:
-	case V4L2_PIX_FMT_YUYV:
-	case V4L2_PIX_FMT_RGB565:
+	case DRM_FORMAT_UYVY:
+	case DRM_FORMAT_YUYV:
+	case DRM_FORMAT_RGB565:
 		offset = image->rect.left * 2 +
 			image->rect.top * pix->bytesperline;
 		break;
-	case V4L2_PIX_FMT_RGB32:
-	case V4L2_PIX_FMT_BGR32:
+	case DRM_FORMAT_XBGR8888:
+	case DRM_FORMAT_XRGB8888:
 		offset = image->rect.left * 4 +
 			image->rect.top * pix->bytesperline;
 		break;
-	case V4L2_PIX_FMT_RGB24:
-	case V4L2_PIX_FMT_BGR24:
+	case DRM_FORMAT_BGR888:
+	case DRM_FORMAT_RGB888:
 		offset = image->rect.left * 3 +
 			image->rect.top * pix->bytesperline;
 		break;
