@@ -380,6 +380,7 @@ enum ipu_color_space ipu_pixelformat_to_colorspace(u32 pixelformat);
 enum ipu_color_space ipu_mbus_code_to_colorspace(u32 mbus_code);
 int ipu_stride_to_bytes(u32 pixel_stride, u32 pixelformat);
 bool ipu_pixelformat_is_planar(u32 pixelformat);
+bool ipu_drm_fourcc_is_planar(u32 drm_fourcc);
 int ipu_degrees_to_rot_mode(enum ipu_rotate_mode *mode, int degrees,
 			    bool hflip, bool vflip);
 int ipu_rot_mode_to_degrees(int *degrees, enum ipu_rotate_mode mode,

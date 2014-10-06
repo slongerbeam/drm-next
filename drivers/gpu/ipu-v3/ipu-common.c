@@ -153,6 +153,24 @@ bool ipu_pixelformat_is_planar(u32 pixelformat)
 }
 EXPORT_SYMBOL_GPL(ipu_pixelformat_is_planar);
 
+bool ipu_drm_fourcc_is_planar(u32 drm_fourcc)
+{
+	switch (drm_fourcc) {
+	case DRM_FORMAT_YUV420:
+	case DRM_FORMAT_YVU420:
+	case DRM_FORMAT_YUV422:
+	case DRM_FORMAT_YVU422:
+	case DRM_FORMAT_NV12:
+	case DRM_FORMAT_NV21:
+	case DRM_FORMAT_NV16:
+	case DRM_FORMAT_NV61:
+		return true;
+	}
+
+	return false;
+}
+EXPORT_SYMBOL_GPL(ipu_drm_fourcc_is_planar);
+
 enum ipu_color_space ipu_mbus_code_to_colorspace(u32 mbus_code)
 {
 	switch (mbus_code & 0xf000) {
