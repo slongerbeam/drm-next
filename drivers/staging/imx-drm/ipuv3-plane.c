@@ -174,6 +174,10 @@ int ipu_plane_mode_set(struct ipu_plane *ipu_plane, struct drm_crtc *crtc,
 			fb->pixel_format);
 		return ret;
 	}
+	if (ipu_drm_fourcc_is_planar(fb->pixel_format))
+		ipu_cpmem_set_yuv_planar(ipu_plane->ipu_ch, fb->pixel_format,
+					 fb->pitches[0], crtc_h);
+
 	ipu_cpmem_set_high_priority(ipu_plane->ipu_ch);
 
 	ret = ipu_plane_set_base(ipu_plane, fb, src_x, src_y);
