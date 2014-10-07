@@ -140,7 +140,7 @@ int ipu_plane_mode_set(struct ipu_plane *ipu_plane, struct drm_crtc *crtc,
 	switch (ipu_plane->dp_flow) {
 	case IPU_DP_FLOW_SYNC_BG:
 		ret = ipu_dp_setup_channel(ipu_plane->dp,
-				IPUV3_COLORSPACE_RGB,
+				ipu_drm_fourcc_to_colorspace(fb->pixel_format),
 				IPUV3_COLORSPACE_RGB);
 		if (ret) {
 			dev_err(dev,
