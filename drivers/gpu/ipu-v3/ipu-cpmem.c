@@ -413,6 +413,7 @@ void ipu_cpmem_set_yuv_planar_full(struct ipuv3_channel *ch,
 		ipu_ch_param_write_field(ch, IPU_FIELD_VBO, v_offset / 8);
 		break;
 	case DRM_FORMAT_YVU420:
+	case DRM_FORMAT_YVU422:
 		ipu_ch_param_write_field(ch, IPU_FIELD_SLUV, (stride / 2) - 1);
 		ipu_ch_param_write_field(ch, IPU_FIELD_UBO, v_offset / 8);
 		ipu_ch_param_write_field(ch, IPU_FIELD_VBO, u_offset / 8);
@@ -443,6 +444,7 @@ void ipu_cpmem_set_yuv_planar(struct ipuv3_channel *ch, u32 drm_fourcc,
 					      u_offset, v_offset);
 		break;
 	case DRM_FORMAT_YUV422:
+	case DRM_FORMAT_YVU422:
 		uv_stride = stride / 2;
 		u_offset = stride * height;
 		v_offset = u_offset + (uv_stride * height);
@@ -627,6 +629,7 @@ int ipu_cpmem_set_image(struct ipuv3_channel *ch, struct ipu_image *image)
 					      u_offset, v_offset);
 		break;
 	case DRM_FORMAT_YUV422:
+	case DRM_FORMAT_YVU422:
 		offset = Y_OFFSET(pix, image->rect.left, image->rect.top);
 		u_offset = U2_OFFSET(pix, image->rect.left,
 				     image->rect.top) - offset;
