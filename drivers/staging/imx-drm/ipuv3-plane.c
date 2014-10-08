@@ -104,6 +104,7 @@ int ipu_plane_mode_set(struct ipu_plane *ipu_plane, struct drm_crtc *crtc,
 		       uint32_t src_w, uint32_t src_h)
 {
 	struct device *dev = ipu_plane->base.dev->dev;
+	bool is_bg = (ipu_plane->dp_flow == IPU_DP_FLOW_SYNC_BG);
 	int ret;
 
 	/* no scaling */
@@ -156,7 +157,6 @@ int ipu_plane_mode_set(struct ipu_plane *ipu_plane, struct drm_crtc *crtc,
 				ret);
 			return ret;
 		}
-		ipu_dp_set_global_alpha(ipu_plane->dp, 1, 0, 1);
 		break;
 	case IPU_DP_FLOW_SYNC_FG:
 		ipu_dp_setup_channel(ipu_plane->dp,
@@ -164,6 +164,24 @@ int ipu_plane_mode_set(struct ipu_plane *ipu_plane, struct drm_crtc *crtc,
 				IPUV3_COLORSPACE_UNKNOWN);
 		ipu_dp_set_window_pos(ipu_plane->dp, crtc_x, crtc_y);
 		break;
+	}
+
+	if (ipu_plane->dp) {
+		ret = ipu_dp_set_global_alpha(ipu_plane->dp,
+					      ipu_plane->global_alpha_en,
+					      ipu_plane->global_alpha, is_bg);
+		if (ret) {
+			dev_err(dev, "set global alpha failed with %d\n", ret);
+			return ret;
+		}
+
+		ret = ipu_dp_set_chroma_key(ipu_plane->dp,
+					    ipu_plane->colorkey_en,
+					    ipu_plane->colorkey);
+		if (ret) {
+			dev_err(dev, "set colorkey failed with %d\n", ret);
+			return ret;
+		}
 	}
 
 	ret = ipu_dmfc_alloc_bandwidth(ipu_plane->dmfc,
@@ -329,13 +347,86 @@ static void ipu_plane_destroy(struct drm_plane *plane)
 	kfree(ipu_plane);
 }
 
+static int ipu_plane_set_global_alpha(struct ipu_plane *ipu_plane,
+				      u32 global_alpha)
+{
+	bool is_bg = (ipu_plane->dp_flow == IPU_DP_FLOW_SYNC_BG);
+	bool global_alpha_en;
+
+	if (!ipu_plane->dp)
+		return -EINVAL;
+
+	global_alpha_en = ((global_alpha & (1 << 8)) != 0);
+	global_alpha &= ~(1 << 8);
+
+	if (ipu_plane->global_alpha_en == global_alpha_en &&
+	    ipu_plane->global_alpha == global_alpha)
+		return 0;
+
+	ipu_plane->global_alpha_en = global_alpha_en;
+	ipu_plane->global_alpha = global_alpha;
+
+	if (!ipu_plane->enabled)
+		return 0;
+
+	return ipu_dp_set_global_alpha(ipu_plane->dp,
+				       ipu_plane->global_alpha_en,
+				       ipu_plane->global_alpha, is_bg);
+}
+
+static int ipu_plane_set_colorkey(struct ipu_plane *ipu_plane,
+				  u32 colorkey)
+{
+	bool colorkey_en;
+
+	if (!ipu_plane->dp)
+		return -EINVAL;
+
+	colorkey_en = ((colorkey & (1 << 24)) != 0);
+	colorkey &= ~(1 << 24);
+
+	if (ipu_plane->colorkey_en == colorkey_en &&
+	    ipu_plane->colorkey == colorkey)
+		return 0;
+
+	ipu_plane->colorkey_en = colorkey_en;
+	ipu_plane->colorkey = colorkey;
+
+	if (!ipu_plane->enabled)
+		return 0;
+
+	return ipu_dp_set_chroma_key(ipu_plane->dp,
+				     ipu_plane->colorkey_en,
+				     ipu_plane->colorkey);
+}
+
+static int ipu_plane_set_property(struct drm_plane *plane,
+				  struct drm_property *property,
+				  uint64_t value)
+{
+	struct ipu_plane *ipu_plane = to_ipu_plane(plane);
+	int ret;
+
+	DRM_DEBUG_KMS("[%d] %s\n", __LINE__, __func__);
+
+	if (property == ipu_plane->global_alpha_prop)
+		ret = ipu_plane_set_global_alpha(ipu_plane, value);
+	else if (property == ipu_plane->colorkey_prop)
+		ret = ipu_plane_set_colorkey(ipu_plane, value);
+	else
+		ret = -EINVAL;
+
+	return ret;
+}
+
 static struct drm_plane_funcs ipu_plane_funcs = {
 	.update_plane	= ipu_update_plane,
 	.disable_plane	= ipu_disable_plane,
 	.destroy	= ipu_plane_destroy,
+	.set_property	= ipu_plane_set_property,
 };
 
-struct ipu_plane *ipu_plane_init(struct drm_device *dev, struct ipu_soc *ipu,
+struct ipu_plane *ipu_plane_init(struct drm_device *drm, struct ipu_soc *ipu,
 				 int dma, int dp, unsigned int possible_crtcs,
 				 bool priv)
 {
@@ -355,15 +446,58 @@ struct ipu_plane *ipu_plane_init(struct drm_device *dev, struct ipu_soc *ipu,
 	ipu_plane->dma = dma;
 	ipu_plane->dp_flow = dp;
 
-	ret = drm_plane_init(dev, &ipu_plane->base, possible_crtcs,
+	ret = drm_plane_init(drm, &ipu_plane->base, possible_crtcs,
 			     &ipu_plane_funcs, ipu_plane_formats,
 			     ARRAY_SIZE(ipu_plane_formats),
 			     priv);
 	if (ret) {
 		DRM_ERROR("failed to initialize plane\n");
-		kfree(ipu_plane);
-		return ERR_PTR(ret);
+		goto err_free;
 	}
 
+	/* default global alpha is enabled and completely opaque */
+	ipu_plane->global_alpha_en = true;
+	ipu_plane->global_alpha = 255;
+
+	/* for private planes, skip setting up properties */
+	if (priv)
+		return ipu_plane;
+
+	/*
+	 * global alpha range is 0 - 255. Bit 8 is used as a
+	 * flag to disable or enable global alpha.
+	 */
+	ipu_plane->global_alpha_prop = drm_property_create_range(drm, 0,
+								 "alpha",
+								 0, 0x1ff);
+	if (!ipu_plane->global_alpha_prop) {
+		DRM_ERROR("failed to create global alpha property\n");
+		ret = -ENOMEM;
+		goto err_free;
+	}
+
+	/*
+	 * The color key is an RGB24 value. Bit 24 is used as a
+	 * flag to disable or enable color keying.
+	 */
+	ipu_plane->colorkey_prop = drm_property_create_range(drm, 0,
+							     "colorkey",
+							     0, 0x01ffffff);
+	if (!ipu_plane->colorkey_prop) {
+		DRM_ERROR("failed to create colorkey property\n");
+		ret = -ENOMEM;
+		goto err_free;
+	}
+
+	drm_object_attach_property(&ipu_plane->base.base,
+				   ipu_plane->global_alpha_prop,
+				   0x1ff);
+	drm_object_attach_property(&ipu_plane->base.base,
+				   ipu_plane->colorkey_prop,
+				   0);
 	return ipu_plane;
+
+err_free:
+	kfree(ipu_plane);
+	return ERR_PTR(ret);
 }

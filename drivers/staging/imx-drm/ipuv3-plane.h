@@ -27,6 +27,13 @@ struct ipu_plane {
 	int			x;
 	int			y;
 
+	struct drm_property	*global_alpha_prop;
+	struct drm_property	*colorkey_prop;
+	bool			global_alpha_en;
+	u32			global_alpha;
+	bool			colorkey_en;
+	u32			colorkey;
+
 	bool			enabled;
 };
 
