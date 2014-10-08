@@ -122,6 +122,7 @@ struct imx_hdmi {
 
 	struct hdmi_data_info hdmi_data;
 	int vic;
+	int irq;
 
 	u8 edid[HDMI_EDID_LEN];
 	bool cable_plugin;
@@ -1593,7 +1594,7 @@ static int imx_hdmi_bind(struct device *dev, struct device *master, void *data)
 	struct device_node *ddc_node;
 	struct imx_hdmi *hdmi;
 	struct resource *iores;
-	int ret, irq;
+	int ret;
 
 	hdmi = devm_kzalloc(dev, sizeof(*hdmi), GFP_KERNEL);
 	if (!hdmi)
@@ -1619,16 +1620,6 @@ static int imx_hdmi_bind(struct device *dev, struct device *master, void *data)
 	} else {
 		dev_dbg(hdmi->dev, "no ddc property found\n");
 	}
-
-	irq = platform_get_irq(pdev, 0);
-	if (irq < 0)
-		return irq;
-
-	ret = devm_request_threaded_irq(dev, irq, imx_hdmi_hardirq,
-					imx_hdmi_irq, IRQF_SHARED,
-					dev_name(dev), hdmi);
-	if (ret)
-		return ret;
 
 	iores = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	hdmi->regs = devm_ioremap_resource(dev, iores);
@@ -1685,6 +1676,10 @@ static int imx_hdmi_bind(struct device *dev, struct device *master, void *data)
 	 */
 	hdmi_init_clk_regenerator(hdmi);
 
+	ret = imx_hdmi_register(drm, hdmi);
+	if (ret)
+		goto err_isfr;
+
 	/*
 	 * Configure registers related to HDMI interrupt
 	 * generation before registering IRQ.
@@ -1694,13 +1689,20 @@ static int imx_hdmi_bind(struct device *dev, struct device *master, void *data)
 	/* Clear Hotplug interrupts */
 	hdmi_writeb(hdmi, HDMI_IH_PHY_STAT0_HPD, HDMI_IH_PHY_STAT0);
 
-	ret = imx_hdmi_fb_registered(hdmi);
+	ret = platform_get_irq(pdev, 0);
+	if (ret < 0)
+		goto err_iahb;
+	hdmi->irq = ret;
+
+	ret = devm_request_threaded_irq(dev, hdmi->irq, imx_hdmi_hardirq,
+					imx_hdmi_irq, IRQF_SHARED,
+					dev_name(dev), hdmi);
 	if (ret)
 		goto err_iahb;
 
-	ret = imx_hdmi_register(drm, hdmi);
+	ret = imx_hdmi_fb_registered(hdmi);
 	if (ret)
-		goto err_iahb;
+		goto err_irq;
 
 	/* Unmute interrupts */
 	hdmi_writeb(hdmi, ~HDMI_IH_PHY_STAT0_HPD, HDMI_IH_MUTE_PHY_STAT0);
@@ -1709,6 +1711,8 @@ static int imx_hdmi_bind(struct device *dev, struct device *master, void *data)
 
 	return 0;
 
+err_irq:
+	devm_free_irq(dev, hdmi->irq, hdmi);
 err_iahb:
 	clk_disable_unprepare(hdmi->iahb_clk);
 err_isfr:
@@ -1724,6 +1728,7 @@ static void imx_hdmi_unbind(struct device *dev, struct device *master,
 
 	/* Disable all interrupts */
 	hdmi_writeb(hdmi, ~0, HDMI_IH_MUTE_PHY_STAT0);
+	devm_free_irq(dev, hdmi->irq, hdmi);
 
 	hdmi->connector.funcs->destroy(&hdmi->connector);
 	hdmi->encoder.funcs->destroy(&hdmi->encoder);
