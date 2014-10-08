@@ -90,9 +90,7 @@ struct ipu_crtc {
 	struct ipu_dc		*dc;
 	struct ipu_di		*di;
 	int			enabled;
-	struct drm_pending_vblank_event *page_flip_event;
-	struct drm_framebuffer	*newfb;
-	int			irq;
+
 	u32			interface_pix_fmt;
 	unsigned long		di_clkflags;
 	int			di_hsync_pin;
@@ -100,6 +98,22 @@ struct ipu_crtc {
 };
 
 #define to_ipu_crtc(x) container_of(x, struct ipu_crtc, base)
+
+static struct ipu_plane *pipe_to_plane(struct ipu_crtc *ipu_crtc,
+				       int pipe)
+{
+	struct ipu_plane *plane;
+
+	plane = &ipu_crtc->plane[0];
+	if (pipe == plane->pipe)
+		return plane;
+
+	plane = &ipu_crtc->plane[1];
+	if (ipu_crtc->have_overlay && pipe == plane->pipe)
+		return plane;
+
+	return NULL;
+}
 
 static void ipu_fb_enable(struct ipu_crtc *ipu_crtc)
 {
@@ -149,36 +163,18 @@ static void ipu_crtc_dpms(struct drm_crtc *crtc, int mode)
 	}
 }
 
-static int ipu_page_flip(struct drm_crtc *crtc,
+static int ipu_crtc_page_flip(struct drm_crtc *crtc,
 		struct drm_framebuffer *fb,
 		struct drm_pending_vblank_event *event,
 		uint32_t page_flip_flags)
 {
-	struct ipu_crtc *ipu_crtc = to_ipu_crtc(crtc);
-	int ret;
-
-	if (ipu_crtc->newfb)
-		return -EBUSY;
-
-	ret = imx_drm_crtc_vblank_get(ipu_crtc->imx_crtc);
-	if (ret) {
-		dev_dbg(ipu_crtc->dev, "failed to acquire vblank counter\n");
-		list_del(&event->base.link);
-
-		return ret;
-	}
-
-	ipu_crtc->newfb = fb;
-	ipu_crtc->page_flip_event = event;
-	crtc->primary->fb = fb;
-
-	return 0;
+	return ipu_plane_page_flip(crtc->primary, fb, event, page_flip_flags);
 }
 
 static const struct drm_crtc_funcs ipu_crtc_funcs = {
 	.set_config = drm_crtc_helper_set_config,
 	.destroy = drm_crtc_cleanup,
-	.page_flip = ipu_page_flip,
+	.page_flip = ipu_crtc_page_flip,
 };
 
 static int ipu_crtc_mode_set(struct drm_crtc *crtc,
@@ -248,37 +244,6 @@ static int ipu_crtc_mode_set(struct drm_crtc *crtc,
 				  x, y, mode->hdisplay, mode->vdisplay);
 }
 
-static void ipu_crtc_handle_pageflip(struct ipu_crtc *ipu_crtc)
-{
-	unsigned long flags;
-	struct drm_device *drm = ipu_crtc->base.dev;
-
-	spin_lock_irqsave(&drm->event_lock, flags);
-	if (ipu_crtc->page_flip_event)
-		drm_send_vblank_event(drm, -1, ipu_crtc->page_flip_event);
-	ipu_crtc->page_flip_event = NULL;
-	imx_drm_crtc_vblank_put(ipu_crtc->imx_crtc);
-	spin_unlock_irqrestore(&drm->event_lock, flags);
-}
-
-static irqreturn_t ipu_irq_handler(int irq, void *dev_id)
-{
-	struct ipu_crtc *ipu_crtc = dev_id;
-
-	imx_drm_handle_vblank(ipu_crtc->imx_crtc);
-
-	if (ipu_crtc->newfb) {
-		struct ipu_plane *plane = &ipu_crtc->plane[0];
-
-		ipu_crtc->newfb = NULL;
-		ipu_plane_set_base(plane, ipu_crtc->base.primary->fb,
-				   plane->x, plane->y);
-		ipu_crtc_handle_pageflip(ipu_crtc);
-	}
-
-	return IRQ_HANDLED;
-}
-
 static bool ipu_crtc_mode_fixup(struct drm_crtc *crtc,
 				  const struct drm_display_mode *mode,
 				  struct drm_display_mode *adjusted_mode)
@@ -308,17 +273,26 @@ static struct drm_crtc_helper_funcs ipu_helper_funcs = {
 	.commit = ipu_crtc_commit,
 };
 
-static int ipu_enable_vblank(struct drm_crtc *crtc)
-{
-	return 0;
-}
-
-static void ipu_disable_vblank(struct drm_crtc *crtc)
+static int ipu_enable_vblank(struct drm_crtc *crtc, int pipe)
 {
 	struct ipu_crtc *ipu_crtc = to_ipu_crtc(crtc);
+	struct ipu_plane *ipu_plane = pipe_to_plane(ipu_crtc, pipe);
 
-	ipu_crtc->page_flip_event = NULL;
-	ipu_crtc->newfb = NULL;
+	if (!ipu_plane)
+		return -EINVAL;
+
+	return ipu_plane_enable_vblank(ipu_plane);
+}
+
+static void ipu_disable_vblank(struct drm_crtc *crtc, int pipe)
+{
+	struct ipu_crtc *ipu_crtc = to_ipu_crtc(crtc);
+	struct ipu_plane *ipu_plane = pipe_to_plane(ipu_crtc, pipe);
+
+	if (!ipu_plane)
+		return;
+
+	ipu_plane_disable_vblank(ipu_plane);
 }
 
 static int ipu_set_interface_pix_fmt(struct drm_crtc *crtc, u32 encoder_type,
@@ -465,8 +439,8 @@ static int ipu_crtc_init(struct ipu_crtc *ipu_crtc,
 			 struct drm_device *drm)
 {
 	struct device_node *np = ipu_crtc->dev->of_node;
+	int id, primary_pipe, overlay_pipe;
 	int ret;
-	int id;
 
 	ret = ipu_get_resources(ipu_crtc, np);
 	if (ret) {
@@ -484,8 +458,11 @@ static int ipu_crtc_init(struct ipu_crtc *ipu_crtc,
 	}
 
 	id = imx_drm_crtc_id(ipu_crtc->imx_crtc);
+	primary_pipe = imx_drm_primary_plane_pipe(ipu_crtc->imx_crtc);
+
 	ret = ipu_plane_init(&ipu_crtc->plane[0], drm,
 			     ipu_crtc->ipu,
+			     primary_pipe,
 			     ipu_crtc->ch->dma[0],
 			     ipu_crtc->ch->dp[0],
 			     BIT(id), true);
@@ -504,8 +481,10 @@ static int ipu_crtc_init(struct ipu_crtc *ipu_crtc,
 
 	/* If this crtc is using the DP, add an overlay plane */
 	if (ipu_crtc->ch->dp[1] >= 0) {
+		overlay_pipe = imx_drm_overlay_plane_pipe(ipu_crtc->imx_crtc);
 		ret = ipu_plane_init(&ipu_crtc->plane[1], drm,
 				     ipu_crtc->ipu,
+				     overlay_pipe,
 				     ipu_crtc->ch->dma[1],
 				     ipu_crtc->ch->dp[1],
 				     BIT(id), false);
@@ -513,18 +492,8 @@ static int ipu_crtc_init(struct ipu_crtc *ipu_crtc,
 		ipu_crtc->have_overlay = ret ? false : true;
 	}
 
-	ipu_crtc->irq = ipu_plane_irq(&ipu_crtc->plane[0]);
-	ret = devm_request_irq(ipu_crtc->dev, ipu_crtc->irq, ipu_irq_handler, 0,
-			"imx_drm", ipu_crtc);
-	if (ret < 0) {
-		dev_err(ipu_crtc->dev, "irq request failed with %d.\n", ret);
-		goto err_put_plane_res;
-	}
-
 	return 0;
 
-err_put_plane_res:
-	ipu_plane_put_resources(&ipu_crtc->plane[0]);
 err_remove_crtc:
 	imx_drm_remove_crtc(ipu_crtc->imx_crtc);
 err_put_resources:

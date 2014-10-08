@@ -15,6 +15,7 @@ struct ipu_dp;
 
 struct ipu_plane {
 	struct drm_plane	base;
+	int			pipe;
 
 	struct ipu_soc		*ipu;
 	struct ipuv3_channel	*ipu_ch;
@@ -24,6 +25,8 @@ struct ipu_plane {
 	int			dma;
 	int			dp_flow;
 
+	int			width;
+	int			height;
 	int			x;
 	int			y;
 
@@ -34,11 +37,15 @@ struct ipu_plane {
 	bool			colorkey_en;
 	u32			colorkey;
 
+	struct drm_pending_vblank_event *page_flip_event;
+	struct drm_framebuffer	*newfb;
+	int			irq;
+
 	bool			enabled;
 };
 
 int ipu_plane_init(struct ipu_plane *ipu_plane, struct drm_device *drm,
-		   struct ipu_soc *ipu, int dma, int dp,
+		   struct ipu_soc *ipu, int pipe, int dma, int dp,
 		   unsigned int possible_crtcs, bool priv);
 
 /* Init IDMAC, DMFC, DP */
@@ -49,14 +56,18 @@ int ipu_plane_mode_set(struct ipu_plane *plane, struct drm_crtc *crtc,
 		       uint32_t src_x, uint32_t src_y, uint32_t src_w,
 		       uint32_t src_h);
 
+int ipu_plane_page_flip(struct drm_plane *plane,
+			struct drm_framebuffer *fb,
+			struct drm_pending_vblank_event *event,
+			uint32_t flags);
+
+int ipu_plane_enable_vblank(struct ipu_plane *ipu_plane);
+void ipu_plane_disable_vblank(struct ipu_plane *ipu_plane);
+
 void ipu_plane_enable(struct ipu_plane *plane);
 void ipu_plane_disable(struct ipu_plane *plane);
-int ipu_plane_set_base(struct ipu_plane *plane, struct drm_framebuffer *fb,
-		       int x, int y);
 
 int ipu_plane_get_resources(struct ipu_plane *plane);
 void ipu_plane_put_resources(struct ipu_plane *plane);
-
-int ipu_plane_irq(struct ipu_plane *plane);
 
 #endif

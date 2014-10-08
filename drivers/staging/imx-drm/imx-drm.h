@@ -13,10 +13,12 @@ struct imx_drm_crtc;
 struct platform_device;
 
 int imx_drm_crtc_id(struct imx_drm_crtc *crtc);
+int imx_drm_primary_plane_pipe(struct imx_drm_crtc *crtc);
+int imx_drm_overlay_plane_pipe(struct imx_drm_crtc *crtc);
 
 struct imx_drm_crtc_helper_funcs {
-	int (*enable_vblank)(struct drm_crtc *crtc);
-	void (*disable_vblank)(struct drm_crtc *crtc);
+	int (*enable_vblank)(struct drm_crtc *crtc, int pipe);
+	void (*disable_vblank)(struct drm_crtc *crtc, int pipe);
 	int (*set_interface_pix_fmt)(struct drm_crtc *crtc, u32 encoder_type,
 			u32 pix_fmt, int hsync_pin, int vsync_pin);
 	const struct drm_crtc_helper_funcs *crtc_helper_funcs;
@@ -32,10 +34,6 @@ int imx_drm_remove_crtc(struct imx_drm_crtc *);
 int imx_drm_init_drm(struct platform_device *pdev,
 		int preferred_bpp);
 int imx_drm_exit_drm(void);
-
-int imx_drm_crtc_vblank_get(struct imx_drm_crtc *imx_drm_crtc);
-void imx_drm_crtc_vblank_put(struct imx_drm_crtc *imx_drm_crtc);
-void imx_drm_handle_vblank(struct imx_drm_crtc *imx_drm_crtc);
 
 void imx_drm_mode_config_init(struct drm_device *drm);
 

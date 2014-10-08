@@ -43,12 +43,6 @@ static const uint32_t ipu_plane_formats[] = {
 	DRM_FORMAT_NV16,
 };
 
-int ipu_plane_irq(struct ipu_plane *ipu_plane)
-{
-	return ipu_idmac_channel_irq(ipu_plane->ipu, ipu_plane->ipu_ch,
-				     IPU_IRQ_EOF);
-}
-
 static int calc_vref(struct drm_display_mode *mode)
 {
 	unsigned long htotal, vtotal;
@@ -67,8 +61,8 @@ static inline int calc_bandwidth(int width, int height, unsigned int vref)
 	return width * height * vref;
 }
 
-int ipu_plane_set_base(struct ipu_plane *ipu_plane, struct drm_framebuffer *fb,
-		       int x, int y)
+static int set_base(struct ipu_plane *ipu_plane, struct drm_framebuffer *fb,
+		    int bufnum, int x, int y)
 {
 	struct drm_gem_cma_object *cma_obj;
 	unsigned long eba;
@@ -79,21 +73,81 @@ int ipu_plane_set_base(struct ipu_plane *ipu_plane, struct drm_framebuffer *fb,
 		return -EFAULT;
 	}
 
-	dev_dbg(ipu_plane->base.dev->dev, "phys = %pad, x = %d, y = %d",
-		&cma_obj->paddr, x, y);
+	DRM_DEBUG_KMS("phys = %pad, x = %d, y = %d", &cma_obj->paddr, x, y);
 
 	ipu_cpmem_set_stride(ipu_plane->ipu_ch, fb->pitches[0]);
 
 	eba = cma_obj->paddr + fb->offsets[0] +
 	      fb->pitches[0] * y + (fb->bits_per_pixel >> 3) * x;
-	ipu_cpmem_set_buffer(ipu_plane->ipu_ch, 0, eba);
-	ipu_cpmem_set_buffer(ipu_plane->ipu_ch, 1, eba);
+
+	/* bufnum < 0 means set both buffer addresses */
+	if (bufnum < 0) {
+		ipu_cpmem_set_buffer(ipu_plane->ipu_ch, 0, eba);
+		ipu_cpmem_set_buffer(ipu_plane->ipu_ch, 1, eba);
+	} else
+		ipu_cpmem_set_buffer(ipu_plane->ipu_ch, bufnum, eba);
 
 	/* cache offsets for subsequent pageflips */
 	ipu_plane->x = x;
 	ipu_plane->y = y;
 
 	return 0;
+}
+
+static int page_flip(struct ipu_plane *ipu_plane,
+		     struct drm_framebuffer *fb)
+{
+	int curbuf, ret;
+
+	curbuf = ipu_idmac_get_current_buffer(ipu_plane->ipu_ch);
+	curbuf ^= 1;
+
+	DRM_DEBUG_KMS("pipe %d: page flip to %d\n", ipu_plane->pipe, curbuf);
+
+	ret = set_base(ipu_plane, fb, curbuf, ipu_plane->x, ipu_plane->y);
+	if (!ret)
+		ipu_idmac_select_buffer(ipu_plane->ipu_ch, curbuf);
+
+	return ret;
+}
+
+static void handle_page_flip_event(struct ipu_plane *ipu_plane)
+{
+	struct drm_device *drm = ipu_plane->base.dev;
+	unsigned long flags;
+
+	spin_lock_irqsave(&drm->event_lock, flags);
+	if (ipu_plane->page_flip_event)
+		drm_send_vblank_event(drm, -1, ipu_plane->page_flip_event);
+	ipu_plane->page_flip_event = NULL;
+	drm_vblank_put(drm, ipu_plane->pipe);
+	spin_unlock_irqrestore(&drm->event_lock, flags);
+}
+
+static irqreturn_t ipu_plane_irq_handler(int irq, void *dev_id)
+{
+	struct ipu_plane *ipu_plane = dev_id;
+
+	drm_handle_vblank(ipu_plane->base.dev, ipu_plane->pipe);
+
+	if (ipu_plane->newfb) {
+		page_flip(ipu_plane, ipu_plane->newfb);
+		ipu_plane->newfb = NULL;
+		handle_page_flip_event(ipu_plane);
+	}
+
+	return IRQ_HANDLED;
+}
+
+int ipu_plane_enable_vblank(struct ipu_plane *ipu_plane)
+{
+	return 0;
+}
+
+void ipu_plane_disable_vblank(struct ipu_plane *ipu_plane)
+{
+	ipu_plane->page_flip_event = NULL;
+	ipu_plane->newfb = NULL;
 }
 
 int ipu_plane_mode_set(struct ipu_plane *ipu_plane, struct drm_crtc *crtc,
@@ -206,15 +260,31 @@ int ipu_plane_mode_set(struct ipu_plane *ipu_plane, struct drm_crtc *crtc,
 
 	ipu_cpmem_set_high_priority(ipu_plane->ipu_ch);
 
-	ret = ipu_plane_set_base(ipu_plane, fb, src_x, src_y);
+	/* enable double-buffering */
+	ipu_idmac_set_double_buffer(ipu_plane->ipu_ch, true);
+
+	ret = set_base(ipu_plane, fb, -1, src_x, src_y);
 	if (ret < 0)
 		return ret;
+
+	/* cache width/height for subsequent pageflips */
+	ipu_plane->width = src_w;
+	ipu_plane->height = src_h;
+
+	/* set buffers ready */
+	ipu_idmac_select_buffer(ipu_plane->ipu_ch, 0);
+	ipu_idmac_select_buffer(ipu_plane->ipu_ch, 1);
 
 	return 0;
 }
 
 void ipu_plane_put_resources(struct ipu_plane *ipu_plane)
 {
+	if (ipu_plane->irq) {
+		devm_free_irq(ipu_plane->base.dev->dev,
+			      ipu_plane->irq, ipu_plane);
+		ipu_plane->irq = 0;
+	}
 	if (!IS_ERR_OR_NULL(ipu_plane->dp))
 		ipu_dp_put(ipu_plane->dp);
 	if (!IS_ERR_OR_NULL(ipu_plane->dmfc))
@@ -250,6 +320,18 @@ int ipu_plane_get_resources(struct ipu_plane *ipu_plane)
 		}
 	}
 
+	ipu_plane->irq = ipu_idmac_channel_irq(ipu_plane->ipu,
+					       ipu_plane->ipu_ch,
+					       IPU_IRQ_EOF);
+	ret = devm_request_irq(ipu_plane->base.dev->dev,
+			       ipu_plane->irq, ipu_plane_irq_handler, 0,
+			       "imx_drm", ipu_plane);
+	if (ret < 0) {
+		DRM_ERROR("irq request failed with %d\n", ret);
+		ipu_plane->irq = 0;
+		goto err_out;
+	}
+
 	return 0;
 err_out:
 	ipu_plane_put_resources(ipu_plane);
@@ -267,6 +349,12 @@ void ipu_plane_enable(struct ipu_plane *ipu_plane)
 		ipu_dp_enable_channel(ipu_plane->dp);
 
 	ipu_plane->enabled = true;
+
+	/*
+	 * we need to wait up to one frame time after enabling
+	 * to allow the IPU's FSU to settle on an IDMAC buffer.
+	 */
+	usleep_range(50000, 50001);
 }
 
 void ipu_plane_disable(struct ipu_plane *ipu_plane)
@@ -416,6 +504,43 @@ static int ipu_plane_set_property(struct drm_plane *plane,
 	return ret;
 }
 
+int ipu_plane_page_flip(struct drm_plane *plane,
+			struct drm_framebuffer *fb,
+			struct drm_pending_vblank_event *event,
+			uint32_t flags)
+{
+	struct ipu_plane *ipu_plane = to_ipu_plane(plane);
+	int ret;
+
+	DRM_DEBUG_KMS("[%d] %s\n", __LINE__, __func__);
+
+	if (ipu_plane->newfb)
+		return -EBUSY;
+
+	if (ipu_plane->width > fb->width ||
+	    ipu_plane->height > fb->height ||
+	    ipu_plane->x > fb->width - ipu_plane->width ||
+	    ipu_plane->y > fb->height - ipu_plane->height) {
+		DRM_DEBUG_KMS("Invalid fb size %ux%u for plane %ux%u+%d+%d.\n",
+			      fb->width, fb->height,
+			      ipu_plane->width, ipu_plane->height,
+			      ipu_plane->x, ipu_plane->y);
+		return -ENOSPC;
+	}
+
+	ret = drm_vblank_get(ipu_plane->base.dev, ipu_plane->pipe);
+	if (ret) {
+		DRM_DEBUG_KMS("failed to acquire vblank counter\n");
+		return ret;
+	}
+
+	ipu_plane->newfb = fb;
+	ipu_plane->page_flip_event = event;
+	plane->fb = fb;
+
+	return 0;
+}
+
 static struct drm_plane_funcs ipu_plane_funcs = {
 	.update_plane	= ipu_update_plane,
 	.disable_plane	= ipu_disable_plane,
@@ -424,15 +549,16 @@ static struct drm_plane_funcs ipu_plane_funcs = {
 };
 
 int ipu_plane_init(struct ipu_plane *ipu_plane, struct drm_device *drm,
-		   struct ipu_soc *ipu, int dma, int dp,
+		   struct ipu_soc *ipu, int pipe, int dma, int dp,
 		   unsigned int possible_crtcs, bool priv)
 {
 	int ret;
 
-	DRM_DEBUG_KMS("channel %d, dp flow %d, possible_crtcs=0x%x\n",
-		      dma, dp, possible_crtcs);
+	DRM_DEBUG_KMS("channel %d, dp flow %d, pipe %d, possible_crtcs=0x%x\n",
+		      dma, dp, pipe, possible_crtcs);
 
 	ipu_plane->ipu = ipu;
+	ipu_plane->pipe = pipe;
 	ipu_plane->dma = dma;
 	ipu_plane->dp_flow = dp;
 
