@@ -29,6 +29,7 @@
 #include <linux/errno.h>
 #include <drm/drm_gem_cma_helper.h>
 #include <drm/drm_fb_cma_helper.h>
+#include <drm/imx_drm.h>
 
 #include <video/imx-ipu-v3.h>
 #include "imx-drm.h"
@@ -405,10 +406,18 @@ static int ipu_set_interface_pix_fmt(struct drm_crtc *crtc, u32 encoder_type,
 	return 0;
 }
 
+static int ipu_gamma_set(struct drm_crtc *crtc, bool enable, u32 *m, u32 *b)
+{
+	struct ipu_crtc *ipu_crtc = to_ipu_crtc(crtc);
+
+	return ipu_plane_gamma_set(&ipu_crtc->plane[0], true, m, b);
+}
+
 static const struct imx_drm_crtc_helper_funcs ipu_crtc_helper_funcs = {
 	.enable_vblank = ipu_enable_vblank,
 	.disable_vblank = ipu_disable_vblank,
 	.set_interface_pix_fmt = ipu_set_interface_pix_fmt,
+	.gamma_set = ipu_gamma_set,
 	.crtc_funcs = &ipu_crtc_funcs,
 	.crtc_helper_funcs = &ipu_helper_funcs,
 };

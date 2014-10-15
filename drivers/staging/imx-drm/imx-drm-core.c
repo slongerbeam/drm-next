@@ -25,6 +25,7 @@
 #include <drm/drm_gem_cma_helper.h>
 #include <drm/drm_fb_cma_helper.h>
 #include <drm/drm_plane_helper.h>
+#include <drm/imx_drm.h>
 
 #include "imx-drm.h"
 
@@ -121,6 +122,18 @@ static struct imx_drm_crtc *imx_drm_find_crtc(struct drm_crtc *crtc)
 			return imxdrm->crtc[i];
 
 	return NULL;
+}
+
+static struct imx_drm_crtc *imx_drm_find_crtc_by_id(struct drm_device *drm,
+						    u32 crtc_id)
+{
+	struct drm_crtc *crtc;
+
+	crtc = drm_crtc_find(drm, crtc_id);
+	if (!crtc)
+		return NULL;
+
+	return imx_drm_find_crtc(crtc);
 }
 
 int imx_drm_panel_format_pins(struct drm_encoder *encoder,
@@ -538,8 +551,33 @@ int imx_drm_encoder_get_mux_id(struct device_node *node,
 }
 EXPORT_SYMBOL_GPL(imx_drm_encoder_get_mux_id);
 
+static int drm_imx_set_gamma_ioctl(struct drm_device *drm, void *data,
+				   struct drm_file *file_priv)
+{
+	struct drm_imx_gamma *g = data;
+	struct imx_drm_crtc_helper_funcs *helper;
+	struct imx_drm_crtc *imx_crtc;
+	int ret = -EINVAL;
+
+	if (!drm_core_check_feature(drm, DRIVER_MODESET))
+		return -ENODEV;
+
+	drm_modeset_lock_all(drm);
+
+	imx_crtc = imx_drm_find_crtc_by_id(drm, g->crtc_id);
+	if (!imx_crtc)
+		goto out_unlock;
+
+	helper = &imx_crtc->imx_drm_helper_funcs;
+	ret = helper->gamma_set(imx_crtc->crtc, g->enable, g->m, g->b);
+
+out_unlock:
+	drm_modeset_unlock_all(drm);
+	return ret;
+}
+
 static const struct drm_ioctl_desc imx_drm_ioctls[] = {
-	/* none so far */
+	DRM_IOCTL_DEF_DRV(IMX_SET_GAMMA, drm_imx_set_gamma_ioctl, DRM_AUTH),
 };
 
 static struct drm_driver imx_drm_driver = {

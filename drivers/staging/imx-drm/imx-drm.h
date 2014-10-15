@@ -21,6 +21,7 @@ struct imx_drm_crtc_helper_funcs {
 	void (*disable_vblank)(struct drm_crtc *crtc, int pipe);
 	int (*set_interface_pix_fmt)(struct drm_crtc *crtc, u32 encoder_type,
 			u32 pix_fmt, int hsync_pin, int vsync_pin);
+	int (*gamma_set)(struct drm_crtc *crtc, bool enable, u32 *m, u32 *b);
 	const struct drm_crtc_helper_funcs *crtc_helper_funcs;
 	const struct drm_crtc_funcs *crtc_funcs;
 };
@@ -51,7 +52,5 @@ int imx_drm_encoder_parse_of(struct drm_device *drm,
 
 void imx_drm_connector_destroy(struct drm_connector *connector);
 void imx_drm_encoder_destroy(struct drm_encoder *encoder);
-
-#define DRM_IMX_GAMMA_SIZE 16
 
 #endif /* _IMX_DRM_H_ */
