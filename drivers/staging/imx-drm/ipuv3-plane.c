@@ -380,6 +380,16 @@ void ipu_plane_disable(struct ipu_plane *ipu_plane)
 		ipu_dp_disable(ipu_plane->dp);
 }
 
+int ipu_plane_gamma_set(struct ipu_plane *ipu_plane,
+			bool enable, u32 *m, u32 *b)
+{
+	if (!ipu_plane->dp)
+		return -EINVAL;
+
+	return ipu_dp_set_gamma_correction(ipu_plane->dp, enable, m, b);
+}
+
+
 /*
  * drm_plane API
  */

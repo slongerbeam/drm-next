@@ -70,4 +70,7 @@ void ipu_plane_disable(struct ipu_plane *plane);
 int ipu_plane_get_resources(struct ipu_plane *plane);
 void ipu_plane_put_resources(struct ipu_plane *plane);
 
+int ipu_plane_gamma_set(struct ipu_plane *ipu_plane,
+			bool enable, u32 *m, u32 *b);
+
 #endif

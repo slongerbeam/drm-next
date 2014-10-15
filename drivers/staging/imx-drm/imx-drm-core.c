@@ -388,7 +388,8 @@ int imx_drm_add_crtc(struct drm_device *drm, struct drm_crtc *crtc,
 
 	*new_crtc = imx_drm_crtc;
 
-	ret = drm_mode_crtc_set_gamma_size(imx_drm_crtc->crtc, 256);
+	ret = drm_mode_crtc_set_gamma_size(imx_drm_crtc->crtc,
+					   DRM_IMX_GAMMA_SIZE);
 	if (ret)
 		goto err_register;
 

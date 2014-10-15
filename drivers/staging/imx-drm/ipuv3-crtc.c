@@ -171,10 +171,95 @@ static int ipu_crtc_page_flip(struct drm_crtc *crtc,
 	return ipu_plane_page_flip(crtc->primary, fb, event, page_flip_flags);
 }
 
+/*
+ * Normally the DRM Gamma API is used to program a color LUT that contains
+ * gamma-corrected pixel values for red, green, and blue input pixel values
+ * (normally in the range 0 to 255).
+ *
+ * However the i.MX6 LUT is only 256 entries, so it only supports 8 bpp
+ * indexed pixel format. Therefore if the i.MX6 LUT were used to implement
+ * gamma correction, th DRM framebuffer would have to use 8 bpp indexed pixel
+ * format which is insufficient for most use cases. To support a gamma
+ * correcting LUT with full RGB24 or YUV444 pixel formats, there would have
+ * to be 3 separate 256-entry LUTs for each color component.
+ *
+ * But the i.MX6 does support gamma correction via a set of registers that
+ * define a piecewise linear approximation to a luminance gamma correction
+ * curve. This function uses this approach.
+ *
+ * The input pixel values to this function must be in a specific format
+ * according to the i.MX6 reference manual (see Table 37-28 in the
+ * Rev. 1 TRM, dated 04/2013). This info is reprinted here:
+ *
+ * "The required Gamma correction slope for a specific display should be
+ * provided by the display manufacture. This information can be provided
+ * in various forms, as graph or formula. The gamma correction input pixel
+ * level (Gin) should be normalized to a maximum of 383. The gamma correction
+ * output pixel level (Gout) should be normalized to a maximum of 255. Then
+ * the following data should be collected:
+ *
+ * Table 37-28. Gamma correction values
+ *   Gin   Gout
+ *   ---   -----
+ *     0   Gout0
+ *     2   Gout1
+ *     4   Gout2
+ *     8   Gout3
+ *    16   Gout4
+ *    32   Gout5
+ *    64   Gout6
+ *    96   Gout7
+ *   128   Gout8
+ *   160   Gout9
+ *   192   Gout10
+ *   224   Gout11
+ *   256   Gout12
+ *   288   Gout13
+ *   320   Gout14
+ *   352   Gout15"
+ *
+ *
+ * The 16 Gout values must be placed in the input lum[] array. The green
+ * and blue input arrays are ignored.
+ *
+ * The gamma register values are then computed according to Table 37-29
+ * in the Rev. 1 TRM.
+ */
+static void ipu_crtc_gamma_set(struct drm_crtc *crtc,
+			       u16 *lum, u16 *g_unused, u16 *b_unused,
+			       uint32_t start, uint32_t size)
+{
+	struct ipu_crtc *ipu_crtc = to_ipu_crtc(crtc);
+	u32 m[DRM_IMX_GAMMA_SIZE], b[DRM_IMX_GAMMA_SIZE];
+	int i;
+
+	if (size != DRM_IMX_GAMMA_SIZE)
+		return;
+
+	for (i = 0; i < size; i++) {
+		if (i == 0) {
+			b[0] = lum[0];
+			m[0] = 16 * (lum[1] - lum[0]);
+		} else if (i == 15) {
+			b[15] = lum[15];
+			m[15] = 255 - lum[15];
+		} else if (i < 5) {
+			b[i] = 2 * lum[i] - lum[i+1];
+			m[i] = (lum[i+1] - lum[i]) << (5 - i);
+		} else {
+			b[i] = lum[i];
+			m[i] = lum[i+1] - lum[i];
+		}
+	}
+
+	ipu_plane_gamma_set(&ipu_crtc->plane[0], true, m, b);
+}
+
 static const struct drm_crtc_funcs ipu_crtc_funcs = {
 	.set_config = drm_crtc_helper_set_config,
 	.destroy = drm_crtc_cleanup,
 	.page_flip = ipu_crtc_page_flip,
+	.gamma_set = ipu_crtc_gamma_set,
 };
 
 static int ipu_crtc_mode_set(struct drm_crtc *crtc,
