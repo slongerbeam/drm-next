@@ -59,9 +59,26 @@ Parallel display support
 Required properties:
 - compatible: Should be "fsl,imx-parallel-display"
 Optional properties:
-- interface_pix_fmt: How this display is connected to the
-  display interface. Currently supported types: "rgb24", "rgb565", "bgr666"
-  and "lvds666".
+- interface-pix-map: Defines a pixel mapping onto the 24-bit IPU
+  Display Interface bus to the display. Internally the IPU represents
+  pixels in either RGB24 or YUV444 format. This property tells the IPU how
+  to map those RGB24 or YUV444 pixels onto the display interface bus.
+  The data format is as follows:
+
+  interface-pix-map = <c0-dest-msb c0-src-mask c1-dest-msb c1-src-mask
+  		       c2-dest-msb c2-src-mask>;
+
+  where:
+	c0, c1, c2: are the color components (c0 = B/V, c1 = G/U, c2 = R/Y)
+	src-mask: is the mask of component source bits to be forwarded
+	          to the DI bus
+	dest-msb: defines where to place those component bits on the
+	          24-bit DI bus, represented as the MSBit on the bus.
+
+- interface-pix-fmt: A name given to the pixel format sent to the display.
+  The following are names with pre-defined pixel mappings that do not
+  require an explicit interface-pix-map property: "rgb24", "rgb565", "rgb666"
+
 - edid: verbatim EDID data block describing attached display.
 - ddc: phandle describing the i2c bus handling the display data
   channel
@@ -80,4 +97,24 @@ display@di0 {
 			remote-endpoint = <&ipu_di0_disp0>;
 		};
 	};
+};
+
+Pixel map examples:
+
+This example defines a new format named "bgr565" using a pixel map:
+
+display@di0 {
+	compatible = "fsl,imx-parallel-display";
+	edid = [edid-data];
+	interface-pix-fmt = "bgr565";
+	interface-pix-map = <15 0xf8 10 0xfc 4 0xf8>;
+};
+
+This example defines an unnamed format where an rgb666 format is shifted
+up by 6 bits on the DI bus:
+
+display@di0 {
+	compatible = "fsl,imx-parallel-display";
+	edid = [edid-data];
+	interface-pix-map = <11 0xfc 17 0xfc 23 0xfc>;
 };

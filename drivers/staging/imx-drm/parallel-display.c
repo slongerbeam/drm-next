@@ -26,6 +26,7 @@
 #include <drm/drm_panel.h>
 #include <linux/videodev2.h>
 #include <video/of_display_timing.h>
+#include <video/imx-ipu-v3.h>
 
 #include "imx-drm.h"
 
@@ -39,6 +40,7 @@ struct imx_parallel_display {
 	void *edid;
 	int edid_len;
 	u32 interface_pix_fmt;
+	struct ipu_dc_if_map *interface_map;
 	int mode_valid;
 	struct drm_display_mode mode;
 	struct drm_panel *panel;
@@ -123,7 +125,8 @@ static void imx_pd_encoder_prepare(struct drm_encoder *encoder)
 {
 	struct imx_parallel_display *imxpd = enc_to_imxpd(encoder);
 
-	imx_drm_panel_format(encoder, imxpd->interface_pix_fmt, NULL);
+	imx_drm_panel_format(encoder, imxpd->interface_pix_fmt,
+			     imxpd->interface_map);
 }
 
 static void imx_pd_encoder_commit(struct drm_encoder *encoder)
@@ -208,8 +211,9 @@ static int imx_pd_bind(struct device *dev, struct device *master, void *data)
 	struct device_node *panel_node;
 	const u8 *edidp;
 	struct imx_parallel_display *imxpd;
-	int ret;
+	struct ipu_dc_if_map interface_map;
 	const char *fmt;
+	int ret;
 
 	imxpd = devm_kzalloc(dev, sizeof(*imxpd), GFP_KERNEL);
 	if (!imxpd)
@@ -237,6 +241,23 @@ static int imx_pd_bind(struct device *dev, struct device *master, void *data)
 			dev_err(dev, "Unsupported interface pix_fmt!\n");
 			return -EINVAL;
 		}
+	}
+
+	ret = of_property_read_u32_array(np, "interface-pix-map",
+					 (u32 *)&interface_map,
+					 sizeof(interface_map) / sizeof(u32));
+	if (!ret) {
+		imxpd->interface_map =
+			devm_kmalloc(dev, sizeof(imxpd->interface_map),
+				     GFP_KERNEL);
+		if (!imxpd->interface_map)
+			return -ENOMEM;
+		*imxpd->interface_map = interface_map;
+	}
+
+	if (!imxpd->interface_pix_fmt && !imxpd->interface_map) {
+		dev_err(imxpd->dev, "No interface pix fmt defined!\n");
+		return -EINVAL;
 	}
 
 	panel_node = of_parse_phandle(np, "fsl,panel", 0);
