@@ -104,6 +104,14 @@
 
 &hdmi {
 	compatible = "fsl,imx6dl-hdmi";
+	clocks = <&clks IMX6QDL_CLK_HDMI_IAHB>, <&clks IMX6QDL_CLK_HDMI_ISFR>,
+		 <&clks IMX6QDL_CLK_IPU1_DI0_PRE_SEL>,
+		 <&clks IMX6QDL_CLK_IPU1_DI1_PRE_SEL>,
+		 <&clks IMX6QDL_CLK_IPU1_DI0_SEL>,
+		 <&clks IMX6QDL_CLK_IPU1_DI1_SEL>;
+	clock-names = "iahb", "isfr",
+		      "di0_pre_sel", "di1_pre_sel",
+		      "di0_sel", "di1_sel";
 };
 
 &ldb {

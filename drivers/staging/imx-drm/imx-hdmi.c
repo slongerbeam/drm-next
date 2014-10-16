@@ -118,6 +118,8 @@ struct imx_hdmi {
 	struct device *dev;
 	struct clk *isfr_clk;
 	struct clk *iahb_clk;
+	struct clk *di_pre_sel[4];
+	struct clk *di_sel[4];
 
 	struct hdmi_data_info hdmi_data;
 	int vic;
@@ -1452,8 +1454,13 @@ static void imx_hdmi_encoder_dpms(struct drm_encoder *encoder, int mode)
 static void imx_hdmi_encoder_prepare(struct drm_encoder *encoder)
 {
 	struct imx_hdmi *hdmi = container_of(encoder, struct imx_hdmi, encoder);
+	int mux = imx_drm_encoder_get_mux_id(hdmi->dev->of_node, encoder);
 
 	imx_hdmi_poweroff(hdmi);
+
+	/* set DI clock mux to DI pre clock mux */
+	clk_set_parent(hdmi->di_sel[mux], hdmi->di_pre_sel[mux]);
+
 	imx_drm_panel_format(encoder, V4L2_PIX_FMT_RGB24, NULL);
 }
 
@@ -1593,7 +1600,7 @@ static int imx_hdmi_bind(struct device *dev, struct device *master, void *data)
 	struct device_node *ddc_node;
 	struct imx_hdmi *hdmi;
 	struct resource *iores;
-	int ret;
+	int i, ret;
 
 	hdmi = devm_kzalloc(dev, sizeof(*hdmi), GFP_KERNEL);
 	if (!hdmi)
@@ -1628,6 +1635,29 @@ static int imx_hdmi_bind(struct device *dev, struct device *master, void *data)
 	hdmi->regmap = syscon_regmap_lookup_by_phandle(np, "gpr");
 	if (IS_ERR(hdmi->regmap))
 		return PTR_ERR(hdmi->regmap);
+
+	for (i = 0; i < 4; i++) {
+		char clkname[16];
+
+		sprintf(clkname, "di%d_pre_sel", i);
+		hdmi->di_pre_sel[i] = devm_clk_get(hdmi->dev, clkname);
+		if (IS_ERR(hdmi->di_pre_sel[i])) {
+			ret = PTR_ERR(hdmi->di_pre_sel[i]);
+			hdmi->di_pre_sel[i] = NULL;
+			break;
+		}
+
+		sprintf(clkname, "di%d_sel", i);
+		hdmi->di_sel[i] = devm_clk_get(hdmi->dev, clkname);
+		if (IS_ERR(hdmi->di_sel[i])) {
+			ret = PTR_ERR(hdmi->di_sel[i]);
+			hdmi->di_pre_sel[i] = NULL;
+			hdmi->di_sel[i] = NULL;
+			break;
+		}
+	}
+	if (i == 0)
+		return ret;
 
 	hdmi->isfr_clk = devm_clk_get(hdmi->dev, "isfr");
 	if (IS_ERR(hdmi->isfr_clk)) {
