@@ -375,13 +375,18 @@ dev_put:
 
 static void ipu_put_resources(struct ipu_crtc *ipu_crtc)
 {
-	if (!IS_ERR_OR_NULL(ipu_crtc->dc))
+	if (!IS_ERR_OR_NULL(ipu_crtc->dc)) {
 		ipu_dc_put(ipu_crtc->dc);
-	if (!IS_ERR_OR_NULL(ipu_crtc->di))
+		ipu_crtc->dc = NULL;
+	}
+	if (!IS_ERR_OR_NULL(ipu_crtc->di)) {
 		ipu_di_put(ipu_crtc->di);
+		ipu_crtc->di = NULL;
+	}
 	if (!IS_ERR_OR_NULL(ipu_crtc->ipu_dev)) {
 		module_put(ipu_crtc->ipu_dev->driver->owner);
 		put_device(ipu_crtc->ipu_dev);
+		ipu_crtc->ipu_dev = NULL;
 	}
 }
 
@@ -411,6 +416,7 @@ static int ipu_get_resources(struct ipu_crtc *ipu_crtc,
 	ipu_crtc->di = ipu_di_get(ipu_crtc->ipu, di);
 	if (IS_ERR(ipu_crtc->di)) {
 		ret = PTR_ERR(ipu_crtc->di);
+		ipu_crtc->di = NULL;
 		goto err_out;
 	}
 
@@ -425,6 +431,7 @@ static int ipu_get_resources(struct ipu_crtc *ipu_crtc,
 	ipu_crtc->dc = ipu_dc_get(ipu_crtc->ipu, ipu_crtc->ch->dc);
 	if (IS_ERR(ipu_crtc->dc)) {
 		ret = PTR_ERR(ipu_crtc->dc);
+		ipu_crtc->dc = NULL;
 		goto err_out;
 	}
 

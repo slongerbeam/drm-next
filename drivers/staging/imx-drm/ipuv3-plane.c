@@ -285,12 +285,18 @@ void ipu_plane_put_resources(struct ipu_plane *ipu_plane)
 			      ipu_plane->irq, ipu_plane);
 		ipu_plane->irq = 0;
 	}
-	if (!IS_ERR_OR_NULL(ipu_plane->dp))
+	if (!IS_ERR_OR_NULL(ipu_plane->dp)) {
 		ipu_dp_put(ipu_plane->dp);
-	if (!IS_ERR_OR_NULL(ipu_plane->dmfc))
+		ipu_plane->dp = NULL;
+	}
+	if (!IS_ERR_OR_NULL(ipu_plane->dmfc)) {
 		ipu_dmfc_put(ipu_plane->dmfc);
-	if (!IS_ERR_OR_NULL(ipu_plane->ipu_ch))
+		ipu_plane->dmfc = NULL;
+	}
+	if (!IS_ERR_OR_NULL(ipu_plane->ipu_ch)) {
 		ipu_idmac_put(ipu_plane->ipu_ch);
+		ipu_plane->ipu_ch = NULL;
+	}
 }
 
 int ipu_plane_get_resources(struct ipu_plane *ipu_plane)
@@ -300,6 +306,7 @@ int ipu_plane_get_resources(struct ipu_plane *ipu_plane)
 	ipu_plane->ipu_ch = ipu_idmac_get(ipu_plane->ipu, ipu_plane->dma);
 	if (IS_ERR(ipu_plane->ipu_ch)) {
 		ret = PTR_ERR(ipu_plane->ipu_ch);
+		ipu_plane->ipu_ch = NULL;
 		DRM_ERROR("failed to get idmac channel: %d\n", ret);
 		return ret;
 	}
@@ -307,6 +314,7 @@ int ipu_plane_get_resources(struct ipu_plane *ipu_plane)
 	ipu_plane->dmfc = ipu_dmfc_get(ipu_plane->ipu, ipu_plane->dma);
 	if (IS_ERR(ipu_plane->dmfc)) {
 		ret = PTR_ERR(ipu_plane->dmfc);
+		ipu_plane->dmfc = NULL;
 		DRM_ERROR("failed to get dmfc: ret %d\n", ret);
 		goto err_out;
 	}
@@ -315,6 +323,7 @@ int ipu_plane_get_resources(struct ipu_plane *ipu_plane)
 		ipu_plane->dp = ipu_dp_get(ipu_plane->ipu, ipu_plane->dp_flow);
 		if (IS_ERR(ipu_plane->dp)) {
 			ret = PTR_ERR(ipu_plane->dp);
+			ipu_plane->dp = NULL;
 			DRM_ERROR("failed to get dp flow: %d\n", ret);
 			goto err_out;
 		}
