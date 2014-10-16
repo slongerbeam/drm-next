@@ -31,7 +31,6 @@
 #include <drm/drm_fb_cma_helper.h>
 #include <drm/imx_drm.h>
 
-#include <video/imx-ipu-v3.h>
 #include "imx-drm.h"
 #include "ipuv3-plane.h"
 
@@ -93,6 +92,8 @@ struct ipu_crtc {
 	int			enabled;
 
 	u32			interface_pix_fmt;
+	struct ipu_dc_if_map    *interface_pix_map;
+
 	unsigned long		di_clkflags;
 	int			di_hsync_pin;
 	int			di_vsync_pin;
@@ -272,6 +273,7 @@ static int ipu_crtc_mode_set(struct drm_crtc *crtc,
 	struct ipu_crtc *ipu_crtc = to_ipu_crtc(crtc);
 	int ret;
 	struct ipu_di_signal_cfg sig_cfg = {};
+	struct ipu_dc_if_map *out_pixel_map;
 	u32 out_pixel_fmt;
 
 	dev_dbg(ipu_crtc->dev, "%s: mode->hdisplay: %d\n", __func__,
@@ -280,6 +282,7 @@ static int ipu_crtc_mode_set(struct drm_crtc *crtc,
 			mode->vdisplay);
 
 	out_pixel_fmt = ipu_crtc->interface_pix_fmt;
+	out_pixel_map = ipu_crtc->interface_pix_map;
 
 	if (mode->flags & DRM_MODE_FLAG_INTERLACE)
 		sig_cfg.interlaced = 1;
@@ -309,7 +312,7 @@ static int ipu_crtc_mode_set(struct drm_crtc *crtc,
 	sig_cfg.vsync_pin = ipu_crtc->di_vsync_pin;
 
 	ret = ipu_dc_init_sync(ipu_crtc->dc, ipu_crtc->di, sig_cfg.interlaced,
-			out_pixel_fmt, NULL, mode->hdisplay);
+			out_pixel_fmt, out_pixel_map, mode->hdisplay);
 	if (ret) {
 		dev_err(ipu_crtc->dev,
 				"initializing display controller failed with %d\n",
@@ -382,11 +385,13 @@ static void ipu_disable_vblank(struct drm_crtc *crtc, int pipe)
 }
 
 static int ipu_set_interface_pix_fmt(struct drm_crtc *crtc, u32 encoder_type,
-		u32 pixfmt, int hsync_pin, int vsync_pin)
+				     u32 pixfmt, struct ipu_dc_if_map *pixmap,
+				     int hsync_pin, int vsync_pin)
 {
 	struct ipu_crtc *ipu_crtc = to_ipu_crtc(crtc);
 
 	ipu_crtc->interface_pix_fmt = pixfmt;
+	ipu_crtc->interface_pix_map = pixmap;
 	ipu_crtc->di_hsync_pin = hsync_pin;
 	ipu_crtc->di_vsync_pin = vsync_pin;
 

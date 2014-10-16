@@ -137,7 +137,9 @@ static struct imx_drm_crtc *imx_drm_find_crtc_by_id(struct drm_device *drm,
 }
 
 int imx_drm_panel_format_pins(struct drm_encoder *encoder,
-		u32 interface_pix_fmt, int hsync_pin, int vsync_pin)
+			      u32 interface_pix_fmt,
+			      struct ipu_dc_if_map *interface_pix_map,
+			      int hsync_pin, int vsync_pin)
 {
 	struct imx_drm_crtc_helper_funcs *helper;
 	struct imx_drm_crtc *imx_crtc;
@@ -149,15 +151,22 @@ int imx_drm_panel_format_pins(struct drm_encoder *encoder,
 	helper = &imx_crtc->imx_drm_helper_funcs;
 	if (helper->set_interface_pix_fmt)
 		return helper->set_interface_pix_fmt(encoder->crtc,
-				encoder->encoder_type, interface_pix_fmt,
-				hsync_pin, vsync_pin);
+						     encoder->encoder_type,
+						     interface_pix_fmt,
+						     interface_pix_map,
+						     hsync_pin, vsync_pin);
 	return 0;
 }
 EXPORT_SYMBOL_GPL(imx_drm_panel_format_pins);
 
-int imx_drm_panel_format(struct drm_encoder *encoder, u32 interface_pix_fmt)
+int imx_drm_panel_format(struct drm_encoder *encoder,
+			 u32 interface_pix_fmt,
+			 struct ipu_dc_if_map *interface_pix_map)
 {
-	return imx_drm_panel_format_pins(encoder, interface_pix_fmt, 2, 3);
+	return imx_drm_panel_format_pins(encoder,
+					 interface_pix_fmt,
+					 interface_pix_map,
+					 2, 3);
 }
 EXPORT_SYMBOL_GPL(imx_drm_panel_format);
 

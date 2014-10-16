@@ -27,7 +27,6 @@
 #include <drm/drm_crtc_helper.h>
 #include <drm/drm_edid.h>
 #include <drm/drm_encoder_slave.h>
-#include <video/imx-ipu-v3.h>
 
 #include "imx-hdmi.h"
 #include "imx-drm.h"
@@ -1455,7 +1454,7 @@ static void imx_hdmi_encoder_prepare(struct drm_encoder *encoder)
 	struct imx_hdmi *hdmi = container_of(encoder, struct imx_hdmi, encoder);
 
 	imx_hdmi_poweroff(hdmi);
-	imx_drm_panel_format(encoder, V4L2_PIX_FMT_RGB24);
+	imx_drm_panel_format(encoder, V4L2_PIX_FMT_RGB24, NULL);
 }
 
 static void imx_hdmi_encoder_commit(struct drm_encoder *encoder)
