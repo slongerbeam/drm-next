@@ -124,6 +124,7 @@ struct imx_hdmi {
 	struct hdmi_data_info hdmi_data;
 	int vic;
 	int irq;
+	int mux;
 
 	u8 edid[HDMI_EDID_LEN];
 	bool cable_plugin;
@@ -1454,12 +1455,13 @@ static void imx_hdmi_encoder_dpms(struct drm_encoder *encoder, int mode)
 static void imx_hdmi_encoder_prepare(struct drm_encoder *encoder)
 {
 	struct imx_hdmi *hdmi = container_of(encoder, struct imx_hdmi, encoder);
-	int mux = imx_drm_encoder_get_mux_id(hdmi->dev->of_node, encoder);
+
+	hdmi->mux = imx_drm_encoder_get_mux_id(hdmi->dev->of_node, encoder);
 
 	imx_hdmi_poweroff(hdmi);
 
 	/* set DI clock mux to DI pre clock mux */
-	clk_set_parent(hdmi->di_sel[mux], hdmi->di_pre_sel[mux]);
+	clk_set_parent(hdmi->di_sel[hdmi->mux], hdmi->di_pre_sel[hdmi->mux]);
 
 	imx_drm_panel_format(encoder, V4L2_PIX_FMT_RGB24, NULL);
 }
@@ -1467,9 +1469,8 @@ static void imx_hdmi_encoder_prepare(struct drm_encoder *encoder)
 static void imx_hdmi_encoder_commit(struct drm_encoder *encoder)
 {
 	struct imx_hdmi *hdmi = container_of(encoder, struct imx_hdmi, encoder);
-	int mux = imx_drm_encoder_get_mux_id(hdmi->dev->of_node, encoder);
 
-	imx_hdmi_set_ipu_di_mux(hdmi, mux);
+	imx_hdmi_set_ipu_di_mux(hdmi, hdmi->mux);
 
 	imx_hdmi_poweron(hdmi);
 }
