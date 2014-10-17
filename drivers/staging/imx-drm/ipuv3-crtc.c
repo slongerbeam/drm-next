@@ -80,6 +80,7 @@ struct ipu_crtc {
 	struct device           *ipu_dev; /* our ipu */
 	struct ipu_soc          *ipu;
 	struct device_node      *port;    /* our port */
+	int			id;       /* this crtc's id */
 
 	const struct ipu_channels *ch;
 
@@ -545,7 +546,7 @@ static int ipu_crtc_init(struct ipu_crtc *ipu_crtc,
 			 struct drm_device *drm)
 {
 	struct device_node *np = ipu_crtc->dev->of_node;
-	int id, primary_pipe, overlay_pipe;
+	int primary_pipe, overlay_pipe;
 	int ret;
 
 	ret = ipu_get_resources(ipu_crtc, np);
@@ -563,7 +564,7 @@ static int ipu_crtc_init(struct ipu_crtc *ipu_crtc,
 		goto err_put_resources;
 	}
 
-	id = imx_drm_crtc_id(ipu_crtc->imx_crtc);
+	ipu_crtc->id = imx_drm_crtc_id(ipu_crtc->imx_crtc);
 	primary_pipe = imx_drm_primary_plane_pipe(ipu_crtc->imx_crtc);
 
 	ret = ipu_plane_init(&ipu_crtc->plane[0], drm,
@@ -571,7 +572,7 @@ static int ipu_crtc_init(struct ipu_crtc *ipu_crtc,
 			     primary_pipe,
 			     ipu_crtc->ch->dma[0],
 			     ipu_crtc->ch->dp[0],
-			     BIT(id), true);
+			     BIT(ipu_crtc->id), true);
 	if (ret) {
 		dev_err(ipu_crtc->dev, "init primary plane failed with %d\n",
 			ret);
@@ -593,7 +594,7 @@ static int ipu_crtc_init(struct ipu_crtc *ipu_crtc,
 				     overlay_pipe,
 				     ipu_crtc->ch->dma[1],
 				     ipu_crtc->ch->dp[1],
-				     BIT(id), false);
+				     BIT(ipu_crtc->id), false);
 
 		ipu_crtc->have_overlay = ret ? false : true;
 	}
@@ -625,6 +626,7 @@ static int ipu_drm_bind(struct device *dev, struct device *master, void *data)
 		return ret;
 
 	dev_set_drvdata(dev, ipu_crtc);
+	dev_set_name(dev, "crtc%d", ipu_crtc->id);
 
 	return 0;
 }
