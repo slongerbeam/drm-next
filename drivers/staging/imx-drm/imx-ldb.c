@@ -28,7 +28,9 @@
 #include <linux/mfd/syscon/imx6q-iomuxc-gpr.h>
 #include <linux/of_address.h>
 #include <linux/of_device.h>
-#include <video/of_videomode.h>
+#include <video/display_timing.h>
+#include <video/of_display_timing.h>
+#include <video/videomode.h>
 #include <linux/regmap.h>
 #include <linux/videodev2.h>
 
@@ -65,8 +67,7 @@ struct imx_ldb_channel {
 	int chno;
 	void *edid;
 	int edid_len;
-	struct drm_display_mode mode;
-	int mode_valid;
+	struct display_timings *timings;
 };
 
 struct bus_mux {
@@ -100,6 +101,7 @@ static enum drm_connector_status imx_ldb_connector_detect(
 static int imx_ldb_connector_get_modes(struct drm_connector *connector)
 {
 	struct imx_ldb_channel *imx_ldb_ch = con_to_imx_ldb_ch(connector);
+	struct display_timings *timings = imx_ldb_ch->timings;
 	int num_modes = 0;
 
 	imx_ldb_entry_dbg(imx_ldb_ch);
@@ -113,16 +115,26 @@ static int imx_ldb_connector_get_modes(struct drm_connector *connector)
 		num_modes = drm_add_edid_modes(connector, imx_ldb_ch->edid);
 	}
 
-	if (imx_ldb_ch->mode_valid) {
+	if (timings) {
 		struct drm_display_mode *mode;
+		struct videomode vm;
+		int i;
 
-		mode = drm_mode_create(connector->dev);
-		if (!mode)
-			return -EINVAL;
-		drm_mode_copy(mode, &imx_ldb_ch->mode);
-		mode->type |= DRM_MODE_TYPE_DRIVER | DRM_MODE_TYPE_PREFERRED;
-		drm_mode_probed_add(connector, mode);
-		num_modes++;
+		for (i = 0; i < timings->num_timings; i++) {
+			if (videomode_from_timings(timings, &vm, i))
+				break;
+
+			mode = drm_mode_create(connector->dev);
+			drm_display_mode_from_videomode(&vm, mode);
+
+			mode->type = DRM_MODE_TYPE_DRIVER;
+			if (i == timings->native_mode)
+				mode->type |= DRM_MODE_TYPE_PREFERRED;
+
+			drm_mode_set_name(mode);
+			drm_mode_probed_add(connector, mode);
+			num_modes++;
+		}
 	}
 
 	return num_modes;
@@ -568,15 +580,10 @@ static int imx_ldb_bind(struct device *dev, struct device *master, void *data)
 				channel->edid = kmemdup(edidp,
 							channel->edid_len,
 							GFP_KERNEL);
-			} else {
-				/* fallback to display-timings node */
-				ret = of_get_drm_display_mode(child,
-							      &channel->mode,
-							      0);
-				if (!ret)
-					channel->mode_valid = 1;
 			}
 		}
+
+		channel->timings = of_get_display_timings(child);
 
 		ret = of_property_read_u32(child, "fsl,data-width", &datawidth);
 		if (ret)
@@ -639,6 +646,9 @@ static void imx_ldb_unbind(struct device *dev, struct device *master,
 		channel->encoder.funcs->destroy(&channel->encoder);
 
 		i2c_put_adapter(channel->ddc);
+
+		if (channel->timings)
+			display_timings_release(channel->timings);
 	}
 }
 
