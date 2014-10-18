@@ -637,6 +637,8 @@ static void ipu_drm_unbind(struct device *dev, struct device *master,
 {
 	struct ipu_crtc *ipu_crtc = dev_get_drvdata(dev);
 
+	ipu_fb_disable(ipu_crtc);
+
 	imx_drm_remove_crtc(ipu_crtc->imx_crtc);
 
 	ipu_plane_put_resources(&ipu_crtc->plane[0]);
