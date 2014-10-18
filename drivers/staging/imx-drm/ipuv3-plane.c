@@ -159,7 +159,7 @@ int ipu_plane_mode_set(struct ipu_plane *ipu_plane, struct drm_crtc *crtc,
 {
 	struct device *dev = ipu_plane->base.dev->dev;
 	bool is_bg = (ipu_plane->dp_flow == IPU_DP_FLOW_SYNC_BG);
-	int ret;
+	int burstsize, ret;
 
 	/* no scaling */
 	if (src_w != crtc_w || src_h != crtc_h)
@@ -238,14 +238,6 @@ int ipu_plane_mode_set(struct ipu_plane *ipu_plane, struct drm_crtc *crtc,
 		}
 	}
 
-	ret = ipu_dmfc_alloc_bandwidth(ipu_plane->dmfc,
-			calc_bandwidth(crtc_w, crtc_h,
-				       calc_vref(mode)), crtc_w, 64);
-	if (ret) {
-		dev_err(dev, "allocating dmfc bandwidth failed with %d\n", ret);
-		return ret;
-	}
-
 	ipu_cpmem_zero(ipu_plane->ipu_ch);
 	ipu_cpmem_set_resolution(ipu_plane->ipu_ch, src_w, src_h);
 	ret = ipu_cpmem_set_fmt(ipu_plane->ipu_ch, fb->pixel_format);
@@ -259,6 +251,16 @@ int ipu_plane_mode_set(struct ipu_plane *ipu_plane, struct drm_crtc *crtc,
 					 fb->pitches[0], crtc_h);
 
 	ipu_cpmem_set_high_priority(ipu_plane->ipu_ch);
+
+	burstsize = ipu_cpmem_get_burstsize(ipu_plane->ipu_ch);
+
+	ret = ipu_dmfc_alloc_bandwidth(ipu_plane->dmfc,
+			calc_bandwidth(crtc_w, crtc_h,
+				       calc_vref(mode)), crtc_w, burstsize);
+	if (ret) {
+		dev_err(dev, "allocating dmfc bandwidth failed with %d\n", ret);
+		return ret;
+	}
 
 	/* enable double-buffering */
 	ipu_idmac_set_double_buffer(ipu_plane->ipu_ch, true);
