@@ -25,8 +25,9 @@
 #include <drm/drm_crtc_helper.h>
 #include <drm/drm_panel.h>
 #include <linux/videodev2.h>
+#include <video/display_timing.h>
 #include <video/of_display_timing.h>
-#include <video/imx-ipu-v3.h>
+#include <video/videomode.h>
 
 #include "imx-drm.h"
 
@@ -41,8 +42,7 @@ struct imx_parallel_display {
 	int edid_len;
 	u32 interface_pix_fmt;
 	struct ipu_dc_if_map *interface_map;
-	int mode_valid;
-	struct drm_display_mode mode;
+	struct display_timings *timings;
 	struct drm_panel *panel;
 };
 
@@ -55,7 +55,7 @@ static enum drm_connector_status imx_pd_connector_detect(
 static int imx_pd_connector_get_modes(struct drm_connector *connector)
 {
 	struct imx_parallel_display *imxpd = con_to_imxpd(connector);
-	struct device_node *np = imxpd->dev->of_node;
+	struct display_timings *timings = imxpd->timings;
 	int num_modes = 0;
 
 	if (imxpd->panel && imxpd->panel->funcs &&
@@ -70,27 +70,26 @@ static int imx_pd_connector_get_modes(struct drm_connector *connector)
 		num_modes = drm_add_edid_modes(connector, imxpd->edid);
 	}
 
-	if (imxpd->mode_valid) {
-		struct drm_display_mode *mode = drm_mode_create(connector->dev);
+	if (timings) {
+		struct drm_display_mode *mode;
+		struct videomode vm;
+		int i;
 
-		if (!mode)
-			return -EINVAL;
-		drm_mode_copy(mode, &imxpd->mode);
-		mode->type |= DRM_MODE_TYPE_DRIVER | DRM_MODE_TYPE_PREFERRED;
-		drm_mode_probed_add(connector, mode);
-		num_modes++;
-	}
+		for (i = 0; i < timings->num_timings; i++) {
+			if (videomode_from_timings(timings, &vm, i))
+				break;
 
-	if (np) {
-		struct drm_display_mode *mode = drm_mode_create(connector->dev);
+			mode = drm_mode_create(connector->dev);
+			drm_display_mode_from_videomode(&vm, mode);
 
-		if (!mode)
-			return -EINVAL;
-		of_get_drm_display_mode(np, &imxpd->mode, OF_USE_NATIVE_MODE);
-		drm_mode_copy(mode, &imxpd->mode);
-		mode->type |= DRM_MODE_TYPE_DRIVER | DRM_MODE_TYPE_PREFERRED;
-		drm_mode_probed_add(connector, mode);
-		num_modes++;
+			mode->type = DRM_MODE_TYPE_DRIVER;
+			if (i == timings->native_mode)
+				mode->type |= DRM_MODE_TYPE_PREFERRED;
+
+			drm_mode_set_name(mode);
+			drm_mode_probed_add(connector, mode);
+			num_modes++;
+		}
 	}
 
 	return num_modes;
@@ -223,6 +222,8 @@ static int imx_pd_bind(struct device *dev, struct device *master, void *data)
 	if (edidp)
 		imxpd->edid = kmemdup(edidp, imxpd->edid_len, GFP_KERNEL);
 
+	imxpd->timings = of_get_display_timings(np);
+
 	ret = of_property_read_string(np, "interface-pix-fmt", &fmt);
 	if (!ret) {
 		if (!strcmp(fmt, "rgb24"))
@@ -282,6 +283,9 @@ static void imx_pd_unbind(struct device *dev, struct device *master,
 
 	imxpd->encoder.funcs->destroy(&imxpd->encoder);
 	imxpd->connector.funcs->destroy(&imxpd->connector);
+
+	if (imxpd->timings)
+		display_timings_release(imxpd->timings);
 }
 
 static const struct component_ops imx_pd_ops = {
