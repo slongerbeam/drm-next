@@ -92,10 +92,32 @@ struct imx_ldb {
 #define imx_ldb_entry_dbg(ch)			\
 	imx_ldb_dbg((ch), "%s\n", __func__)
 
+/*
+ * Use the result of ddc probe to detect LVDS display presence
+ * if a ddc DT node was specified.
+ */
 static enum drm_connector_status imx_ldb_connector_detect(
 		struct drm_connector *connector, bool force)
 {
-	return connector_status_connected;
+	struct imx_ldb_channel *imx_ldb_ch = con_to_imx_ldb_ch(connector);
+	enum drm_connector_status status;
+
+	if (imx_ldb_ch->ddc) {
+		if (drm_probe_ddc(imx_ldb_ch->ddc)) {
+			status = connector_status_connected;
+			imx_ldb_dbg(imx_ldb_ch,
+				    "ddc probe success, connected\n");
+		} else {
+			status = connector_status_disconnected;
+			imx_ldb_dbg(imx_ldb_ch,
+				    "ddc probe failed, disconnected\n");
+		}
+	} else {
+		status = connector_status_connected;
+		imx_ldb_dbg(imx_ldb_ch, "no ddc, assuming connected\n");
+	}
+
+	return status;
 }
 
 static int imx_ldb_connector_get_modes(struct drm_connector *connector)
