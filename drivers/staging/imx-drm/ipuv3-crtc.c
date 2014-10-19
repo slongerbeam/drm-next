@@ -174,6 +174,17 @@ static int ipu_crtc_page_flip(struct drm_crtc *crtc,
 	return ipu_plane_page_flip(crtc->primary, fb, event, page_flip_flags);
 }
 
+static int ipu_crtc_mode_set_base(struct drm_crtc *crtc, int x, int y,
+				  struct drm_framebuffer *old_fb)
+{
+	struct ipu_crtc *ipu_crtc = to_ipu_crtc(crtc);
+
+	ipu_crtc->plane[0].x = x;
+	ipu_crtc->plane[0].y = y;
+
+	return ipu_plane_page_flip(crtc->primary, crtc->primary->fb, NULL, 0);
+}
+
 /*
  * Normally the DRM Gamma API is used to program a color LUT that contains
  * gamma-corrected pixel values for red, green, and blue input pixel values
@@ -358,6 +369,7 @@ static void ipu_crtc_commit(struct drm_crtc *crtc)
 
 static struct drm_crtc_helper_funcs ipu_helper_funcs = {
 	.dpms = ipu_crtc_dpms,
+	.mode_set_base = ipu_crtc_mode_set_base,
 	.mode_fixup = ipu_crtc_mode_fixup,
 	.mode_set = ipu_crtc_mode_set,
 	.prepare = ipu_crtc_prepare,
