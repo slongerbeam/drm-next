@@ -150,6 +150,28 @@ void ipu_plane_disable_vblank(struct ipu_plane *ipu_plane)
 	ipu_plane->newfb = NULL;
 }
 
+void ipu_plane_cancel_page_flip(struct ipu_plane *ipu_plane,
+				struct drm_file *file)
+{
+	struct drm_device *drm = ipu_plane->base.dev;
+	struct drm_pending_vblank_event *event;
+	unsigned long flags;
+
+	/*
+	 * Destroy the pending vertical blanking event associated with the
+	 * pending page flip, if any, and disable vertical blanking interrupts.
+	 */
+	spin_lock_irqsave(&drm->event_lock, flags);
+	event = ipu_plane->page_flip_event;
+	if (event && event->base.file_priv == file) {
+		ipu_plane->page_flip_event = NULL;
+		ipu_plane->newfb = NULL;
+		event->base.destroy(&event->base);
+		drm_vblank_put(drm, ipu_plane->pipe);
+	}
+	spin_unlock_irqrestore(&drm->event_lock, flags);
+}
+
 int ipu_plane_mode_set(struct ipu_plane *ipu_plane, struct drm_crtc *crtc,
 		       struct drm_display_mode *mode,
 		       struct drm_framebuffer *fb, int crtc_x, int crtc_y,

@@ -63,6 +63,8 @@ int ipu_plane_page_flip(struct drm_plane *plane,
 
 int ipu_plane_enable_vblank(struct ipu_plane *ipu_plane);
 void ipu_plane_disable_vblank(struct ipu_plane *ipu_plane);
+void ipu_plane_cancel_page_flip(struct ipu_plane *ipu_plane,
+				struct drm_file *file);
 
 void ipu_plane_enable(struct ipu_plane *plane);
 void ipu_plane_disable(struct ipu_plane *plane);

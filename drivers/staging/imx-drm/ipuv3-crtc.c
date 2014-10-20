@@ -398,6 +398,18 @@ static void ipu_disable_vblank(struct drm_crtc *crtc, int pipe)
 	ipu_plane_disable_vblank(ipu_plane);
 }
 
+static void ipu_cancel_page_flip(struct drm_crtc *crtc, struct drm_file *file,
+				 int pipe)
+{
+	struct ipu_crtc *ipu_crtc = to_ipu_crtc(crtc);
+	struct ipu_plane *ipu_plane = pipe_to_plane(ipu_crtc, pipe);
+
+	if (!ipu_plane)
+		return;
+
+	ipu_plane_cancel_page_flip(ipu_plane, file);
+}
+
 static int ipu_set_interface_pix_fmt(struct drm_crtc *crtc, u32 encoder_type,
 				     u32 pixfmt, struct ipu_dc_if_map *pixmap,
 				     int hsync_pin, int vsync_pin)
@@ -435,6 +447,7 @@ static int ipu_gamma_set(struct drm_crtc *crtc, bool enable, u32 *m, u32 *b)
 static const struct imx_drm_crtc_helper_funcs ipu_crtc_helper_funcs = {
 	.enable_vblank = ipu_enable_vblank,
 	.disable_vblank = ipu_disable_vblank,
+	.cancel_page_flip = ipu_cancel_page_flip,
 	.set_interface_pix_fmt = ipu_set_interface_pix_fmt,
 	.gamma_set = ipu_gamma_set,
 	.crtc_funcs = &ipu_crtc_funcs,

@@ -21,6 +21,8 @@ int imx_drm_overlay_plane_pipe(struct imx_drm_crtc *crtc);
 struct imx_drm_crtc_helper_funcs {
 	int (*enable_vblank)(struct drm_crtc *crtc, int pipe);
 	void (*disable_vblank)(struct drm_crtc *crtc, int pipe);
+	void (*cancel_page_flip)(struct drm_crtc *crtc, struct drm_file *file,
+				 int pipe);
 	int (*set_interface_pix_fmt)(struct drm_crtc *crtc, u32 encoder_type,
 				     u32 pix_fmt, struct ipu_dc_if_map *pix_map,
 				     int hsync_pin, int vsync_pin);

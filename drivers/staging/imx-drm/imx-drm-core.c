@@ -214,13 +214,24 @@ static void imx_drm_disable_vblank(struct drm_device *drm, int pipe)
 static void imx_drm_driver_preclose(struct drm_device *drm,
 		struct drm_file *file)
 {
+	struct imx_drm_device *imxdrm = drm->dev_private;
+	struct imx_drm_crtc_helper_funcs *helpers;
+	struct imx_drm_crtc *imx_drm_crtc;
 	int pipe;
 
 	if (!file->is_master)
 		return;
 
-	for (pipe = 0; pipe < MAX_PIPES; pipe++)
-		imx_drm_disable_vblank(drm, pipe);
+	for (pipe = 0; pipe < MAX_PIPES; pipe++) {
+		imx_drm_crtc = imxdrm->crtc[pipe_to_crtc_id(pipe)];
+		if (!imx_drm_crtc)
+			continue;
+		helpers = &imx_drm_crtc->imx_drm_helper_funcs;
+		if (!helpers->cancel_page_flip)
+			continue;
+
+		helpers->cancel_page_flip(imx_drm_crtc->crtc, file, pipe);
+	}
 }
 
 static const struct file_operations imx_drm_driver_fops = {
