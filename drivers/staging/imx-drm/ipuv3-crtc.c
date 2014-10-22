@@ -138,6 +138,14 @@ static void ipu_fb_disable(struct ipu_crtc *ipu_crtc)
 	if (!ipu_crtc->enabled)
 		return;
 
+	/*
+	 * If the overlay exists and is enabled, it must be disabled
+	 * before stopping the DI, otherwise DI synchronous display
+	 * errors are the result.
+	 */
+	if (ipu_crtc->have_overlay && ipu_crtc->plane[1].enabled)
+		ipu_plane_disable(&ipu_crtc->plane[1]);
+
 	/* Stop DC channel and DI before IDMAC */
 	ipu_dc_disable_channel(ipu_crtc->dc);
 	ipu_di_disable(ipu_crtc->di);
