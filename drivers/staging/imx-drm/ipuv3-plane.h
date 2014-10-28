@@ -37,9 +37,9 @@ struct ipu_plane {
 	bool			enabled;
 };
 
-struct ipu_plane *ipu_plane_init(struct drm_device *dev, struct ipu_soc *ipu,
-				 int dma, int dp, unsigned int possible_crtcs,
-				 bool priv);
+int ipu_plane_init(struct ipu_plane *ipu_plane, struct drm_device *drm,
+		   struct ipu_soc *ipu, int dma, int dp,
+		   unsigned int possible_crtcs, bool priv);
 
 /* Init IDMAC, DMFC, DP */
 int ipu_plane_mode_set(struct ipu_plane *plane, struct drm_crtc *crtc,

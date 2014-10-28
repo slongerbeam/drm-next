@@ -24,6 +24,7 @@ struct imx_drm_crtc_helper_funcs {
 };
 
 int imx_drm_add_crtc(struct drm_device *drm, struct drm_crtc *crtc,
+		struct drm_plane *primary,
 		struct imx_drm_crtc **new_crtc,
 		const struct imx_drm_crtc_helper_funcs *imx_helper_funcs,
 		struct device_node *port);

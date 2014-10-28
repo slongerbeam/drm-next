@@ -338,13 +338,10 @@ static int ipu_disable_plane(struct drm_plane *plane)
 
 static void ipu_plane_destroy(struct drm_plane *plane)
 {
-	struct ipu_plane *ipu_plane = to_ipu_plane(plane);
-
 	DRM_DEBUG_KMS("[%d] %s\n", __LINE__, __func__);
 
 	ipu_disable_plane(plane);
 	drm_plane_cleanup(plane);
-	kfree(ipu_plane);
 }
 
 static int ipu_plane_set_global_alpha(struct ipu_plane *ipu_plane,
@@ -426,21 +423,14 @@ static struct drm_plane_funcs ipu_plane_funcs = {
 	.set_property	= ipu_plane_set_property,
 };
 
-struct ipu_plane *ipu_plane_init(struct drm_device *drm, struct ipu_soc *ipu,
-				 int dma, int dp, unsigned int possible_crtcs,
-				 bool priv)
+int ipu_plane_init(struct ipu_plane *ipu_plane, struct drm_device *drm,
+		   struct ipu_soc *ipu, int dma, int dp,
+		   unsigned int possible_crtcs, bool priv)
 {
-	struct ipu_plane *ipu_plane;
 	int ret;
 
 	DRM_DEBUG_KMS("channel %d, dp flow %d, possible_crtcs=0x%x\n",
 		      dma, dp, possible_crtcs);
-
-	ipu_plane = kzalloc(sizeof(*ipu_plane), GFP_KERNEL);
-	if (!ipu_plane) {
-		DRM_ERROR("failed to allocate plane\n");
-		return ERR_PTR(-ENOMEM);
-	}
 
 	ipu_plane->ipu = ipu;
 	ipu_plane->dma = dma;
@@ -452,7 +442,7 @@ struct ipu_plane *ipu_plane_init(struct drm_device *drm, struct ipu_soc *ipu,
 			     priv);
 	if (ret) {
 		DRM_ERROR("failed to initialize plane\n");
-		goto err_free;
+		return ret;
 	}
 
 	/* default global alpha is enabled and completely opaque */
@@ -461,7 +451,7 @@ struct ipu_plane *ipu_plane_init(struct drm_device *drm, struct ipu_soc *ipu,
 
 	/* for private planes, skip setting up properties */
 	if (priv)
-		return ipu_plane;
+		return 0;
 
 	/*
 	 * global alpha range is 0 - 255. Bit 8 is used as a
@@ -472,8 +462,7 @@ struct ipu_plane *ipu_plane_init(struct drm_device *drm, struct ipu_soc *ipu,
 								 0, 0x1ff);
 	if (!ipu_plane->global_alpha_prop) {
 		DRM_ERROR("failed to create global alpha property\n");
-		ret = -ENOMEM;
-		goto err_free;
+		return -ENOMEM;
 	}
 
 	/*
@@ -485,8 +474,7 @@ struct ipu_plane *ipu_plane_init(struct drm_device *drm, struct ipu_soc *ipu,
 							     0, 0x01ffffff);
 	if (!ipu_plane->colorkey_prop) {
 		DRM_ERROR("failed to create colorkey property\n");
-		ret = -ENOMEM;
-		goto err_free;
+		return -ENOMEM;
 	}
 
 	drm_object_attach_property(&ipu_plane->base.base,
@@ -495,9 +483,5 @@ struct ipu_plane *ipu_plane_init(struct drm_device *drm, struct ipu_soc *ipu,
 	drm_object_attach_property(&ipu_plane->base.base,
 				   ipu_plane->colorkey_prop,
 				   0);
-	return ipu_plane;
-
-err_free:
-	kfree(ipu_plane);
-	return ERR_PTR(ret);
+	return 0;
 }

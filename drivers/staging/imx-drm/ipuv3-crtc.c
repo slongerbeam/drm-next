@@ -84,7 +84,8 @@ struct ipu_crtc {
 	const struct ipu_channels *ch;
 
 	/* plane[0] is the full plane, plane[1] is the partial plane */
-	struct ipu_plane	*plane[2];
+	struct ipu_plane	plane[2];
+	bool			have_overlay; /* we have a partial plane */
 
 	struct ipu_dc		*dc;
 	struct ipu_di		*di;
@@ -106,7 +107,7 @@ static void ipu_fb_enable(struct ipu_crtc *ipu_crtc)
 		return;
 
 	ipu_dc_enable(ipu_crtc->dc);
-	ipu_plane_enable(ipu_crtc->plane[0]);
+	ipu_plane_enable(&ipu_crtc->plane[0]);
 	/* Start DC channel and DI after IDMAC */
 	ipu_dc_enable_channel(ipu_crtc->dc);
 	ipu_di_enable(ipu_crtc->di);
@@ -123,7 +124,7 @@ static void ipu_fb_disable(struct ipu_crtc *ipu_crtc)
 	/* Stop DC channel and DI before IDMAC */
 	ipu_dc_disable_channel(ipu_crtc->dc);
 	ipu_di_disable(ipu_crtc->di);
-	ipu_plane_disable(ipu_crtc->plane[0]);
+	ipu_plane_disable(&ipu_crtc->plane[0]);
 	ipu_dc_disable(ipu_crtc->dc);
 	ipu_di_disable_clock(ipu_crtc->di);
 
@@ -241,7 +242,7 @@ static int ipu_crtc_mode_set(struct drm_crtc *crtc,
 		return ret;
 	}
 
-	return ipu_plane_mode_set(ipu_crtc->plane[0], crtc, mode,
+	return ipu_plane_mode_set(&ipu_crtc->plane[0], crtc, mode,
 				  crtc->primary->fb,
 				  0, 0, mode->hdisplay, mode->vdisplay,
 				  x, y, mode->hdisplay, mode->vdisplay);
@@ -267,7 +268,7 @@ static irqreturn_t ipu_irq_handler(int irq, void *dev_id)
 	imx_drm_handle_vblank(ipu_crtc->imx_crtc);
 
 	if (ipu_crtc->newfb) {
-		struct ipu_plane *plane = ipu_crtc->plane[0];
+		struct ipu_plane *plane = &ipu_crtc->plane[0];
 
 		ipu_crtc->newfb = NULL;
 		ipu_plane_set_base(plane, ipu_crtc->base.primary->fb,
@@ -474,20 +475,27 @@ static int ipu_crtc_init(struct ipu_crtc *ipu_crtc,
 		return ret;
 	}
 
-	ret = imx_drm_add_crtc(drm, &ipu_crtc->base, &ipu_crtc->imx_crtc,
-			       &ipu_crtc_helper_funcs, ipu_crtc->port);
+	ret = imx_drm_add_crtc(drm, &ipu_crtc->base, &ipu_crtc->plane[0].base,
+			       &ipu_crtc->imx_crtc, &ipu_crtc_helper_funcs,
+			       ipu_crtc->port);
 	if (ret) {
 		dev_err(ipu_crtc->dev, "adding crtc failed with %d.\n", ret);
 		goto err_put_resources;
 	}
 
 	id = imx_drm_crtc_id(ipu_crtc->imx_crtc);
-	ipu_crtc->plane[0] = ipu_plane_init(ipu_crtc->base.dev,
-					    ipu_crtc->ipu,
-					    ipu_crtc->ch->dma[0],
-					    ipu_crtc->ch->dp[0],
-					    BIT(id), true);
-	ret = ipu_plane_get_resources(ipu_crtc->plane[0]);
+	ret = ipu_plane_init(&ipu_crtc->plane[0], drm,
+			     ipu_crtc->ipu,
+			     ipu_crtc->ch->dma[0],
+			     ipu_crtc->ch->dp[0],
+			     BIT(id), true);
+	if (ret) {
+		dev_err(ipu_crtc->dev, "init primary plane failed with %d\n",
+			ret);
+		goto err_remove_crtc;
+	}
+
+	ret = ipu_plane_get_resources(&ipu_crtc->plane[0]);
 	if (ret) {
 		dev_err(ipu_crtc->dev, "getting plane 0 resources failed with %d.\n",
 			ret);
@@ -496,16 +504,16 @@ static int ipu_crtc_init(struct ipu_crtc *ipu_crtc,
 
 	/* If this crtc is using the DP, add an overlay plane */
 	if (ipu_crtc->ch->dp[1] >= 0) {
-		ipu_crtc->plane[1] = ipu_plane_init(ipu_crtc->base.dev,
-						    ipu_crtc->ipu,
-						    ipu_crtc->ch->dma[1],
-						    ipu_crtc->ch->dp[1],
-						    BIT(id), false);
-		if (IS_ERR(ipu_crtc->plane[1]))
-			ipu_crtc->plane[1] = NULL;
+		ret = ipu_plane_init(&ipu_crtc->plane[1], drm,
+				     ipu_crtc->ipu,
+				     ipu_crtc->ch->dma[1],
+				     ipu_crtc->ch->dp[1],
+				     BIT(id), false);
+
+		ipu_crtc->have_overlay = ret ? false : true;
 	}
 
-	ipu_crtc->irq = ipu_plane_irq(ipu_crtc->plane[0]);
+	ipu_crtc->irq = ipu_plane_irq(&ipu_crtc->plane[0]);
 	ret = devm_request_irq(ipu_crtc->dev, ipu_crtc->irq, ipu_irq_handler, 0,
 			"imx_drm", ipu_crtc);
 	if (ret < 0) {
@@ -516,7 +524,7 @@ static int ipu_crtc_init(struct ipu_crtc *ipu_crtc,
 	return 0;
 
 err_put_plane_res:
-	ipu_plane_put_resources(ipu_crtc->plane[0]);
+	ipu_plane_put_resources(&ipu_crtc->plane[0]);
 err_remove_crtc:
 	imx_drm_remove_crtc(ipu_crtc->imx_crtc);
 err_put_resources:
@@ -553,7 +561,7 @@ static void ipu_drm_unbind(struct device *dev, struct device *master,
 
 	imx_drm_remove_crtc(ipu_crtc->imx_crtc);
 
-	ipu_plane_put_resources(ipu_crtc->plane[0]);
+	ipu_plane_put_resources(&ipu_crtc->plane[0]);
 	ipu_put_resources(ipu_crtc);
 }
 
