@@ -273,6 +273,7 @@ int ipu_plane_mode_set(struct ipu_plane *ipu_plane, struct drm_crtc *crtc,
 					 fb->pitches[0], crtc_h);
 
 	ipu_cpmem_set_high_priority(ipu_plane->ipu_ch);
+	ipu_idmac_lock_enable(ipu_plane->ipu_ch, 8);
 
 	burstsize = ipu_cpmem_get_burstsize(ipu_plane->ipu_ch);
 
