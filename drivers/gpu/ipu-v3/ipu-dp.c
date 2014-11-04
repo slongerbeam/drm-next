@@ -100,6 +100,36 @@ static const int yuv2rgb_coeff[5][3] = {
 	{ 0x1,    0x1,    0x1 },    /* S0,S1,S2 */
 };
 
+/*
+ * This is used to convert an RGB24 color key to YUV444, using
+ * the same CSC coefficients as programmed in the DP.
+ */
+static u32 rgb24_to_yuv444(u32 rgb24)
+{
+	u32 red, green, blue;
+	int i, c[3];
+
+	red   = (rgb24 >> 16) & 0xff;
+	green = (rgb24 >>  8) & 0xff;
+	blue  = (rgb24 >>  0) & 0xff;
+
+	for (i = 0; i < 3; i++) {
+		c[i] = red * rgb2yuv_coeff[i][0];
+		c[i] += green * rgb2yuv_coeff[i][1];
+		c[i] += blue * rgb2yuv_coeff[i][2];
+		c[i] /= 16;
+		c[i] += rgb2yuv_coeff[3][i] * 4;
+		c[i] += 8;
+		c[i] /= 16;
+		if (c[i] < 0)
+			c[i] = 0;
+		if (c[i] > 255)
+			c[i] = 255;
+	}
+
+	return (c[0] << 16) | (c[1] << 8) | c[2];
+}
+
 int ipu_dp_set_global_alpha(struct ipu_dp *dp, bool enable,
 		u8 alpha, bool bg_chan)
 {
@@ -135,6 +165,48 @@ int ipu_dp_set_global_alpha(struct ipu_dp *dp, bool enable,
 	return 0;
 }
 EXPORT_SYMBOL_GPL(ipu_dp_set_global_alpha);
+
+/*
+ * The input color_key must always be RGB24. It will be converted to
+ * YUV444 if the pixel format to the Combining unit is YUV space.
+ */
+int ipu_dp_set_color_key(struct ipu_dp *dp, bool enable, u32 color_key)
+{
+	struct ipu_flow *flow = to_flow(dp);
+	struct ipu_dp_priv *priv = flow->priv;
+	enum ipu_color_space combiner_cs;
+	u32 reg;
+
+	mutex_lock(&priv->mutex);
+
+	if (flow->foreground.in_cs == flow->background.in_cs)
+		combiner_cs = flow->foreground.in_cs;
+	else
+		combiner_cs = flow->out_cs;
+
+	if (combiner_cs == IPUV3_COLORSPACE_YUV)
+		color_key = rgb24_to_yuv444(color_key);
+
+	color_key &= 0x00ffffff;
+
+	if (enable) {
+		reg = readl(flow->base + DP_GRAPH_WIND_CTRL) & ~0x00FFFFFFL;
+		writel(reg | color_key, flow->base + DP_GRAPH_WIND_CTRL);
+
+		reg = readl(flow->base + DP_COM_CONF);
+		writel(reg | DP_COM_CONF_GWCKE, flow->base + DP_COM_CONF);
+	} else {
+		reg = readl(flow->base + DP_COM_CONF);
+		writel(reg & ~DP_COM_CONF_GWCKE, flow->base + DP_COM_CONF);
+	}
+
+	ipu_srm_dp_sync_update(priv->ipu);
+
+	mutex_unlock(&priv->mutex);
+
+	return 0;
+}
+EXPORT_SYMBOL(ipu_dp_set_color_key);
 
 int ipu_dp_set_window_pos(struct ipu_dp *dp, u16 x_pos, u16 y_pos)
 {

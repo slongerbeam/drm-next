@@ -272,6 +272,7 @@ int ipu_dp_setup_channel(struct ipu_dp *dp,
 int ipu_dp_set_window_pos(struct ipu_dp *, u16 x_pos, u16 y_pos);
 int ipu_dp_set_global_alpha(struct ipu_dp *dp, bool enable, u8 alpha,
 		bool bg_chan);
+int ipu_dp_set_color_key(struct ipu_dp *dp, bool enable, u32 color_key);
 
 /*
  * IPU CMOS Sensor Interface (csi) functions
