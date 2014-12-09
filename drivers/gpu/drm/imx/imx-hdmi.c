@@ -1417,8 +1417,8 @@ static struct drm_encoder *imx_hdmi_connector_best_encoder(struct drm_connector
 }
 
 static void imx_hdmi_encoder_mode_set(struct drm_encoder *encoder,
-			struct drm_display_mode *mode,
-			struct drm_display_mode *adjusted_mode)
+			struct drm_display_mode *orig_mode,
+			struct drm_display_mode *mode)
 {
 	struct imx_hdmi *hdmi = container_of(encoder, struct imx_hdmi, encoder);
 
