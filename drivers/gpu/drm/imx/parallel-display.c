@@ -225,8 +225,9 @@ static int imx_pd_bind(struct device *dev, struct device *master, void *data)
 			imxpd->interface_pix_fmt = V4L2_PIX_FMT_RGB24;
 		else if (!strcmp(fmt, "rgb565"))
 			imxpd->interface_pix_fmt = V4L2_PIX_FMT_RGB565;
-		else if (!strcmp(fmt, "bgr666"))
-			imxpd->interface_pix_fmt = V4L2_PIX_FMT_BGR666;
+		else if (!strcmp(fmt, "rgb666"))
+			imxpd->interface_pix_fmt =
+				v4l2_fourcc('R', 'G', 'B', 'H');
 		else if (!strcmp(fmt, "lvds666"))
 			imxpd->interface_pix_fmt =
 					v4l2_fourcc('L', 'V', 'D', '6');
