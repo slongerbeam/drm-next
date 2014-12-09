@@ -246,8 +246,8 @@ static void imx_ldb_encoder_commit(struct drm_encoder *encoder)
 }
 
 static void imx_ldb_encoder_mode_set(struct drm_encoder *encoder,
-			 struct drm_display_mode *mode,
-			 struct drm_display_mode *adjusted_mode)
+			 struct drm_display_mode *orig_mode,
+			 struct drm_display_mode *mode)
 {
 	struct imx_ldb_channel *imx_ldb_ch = enc_to_imx_ldb_ch(encoder);
 	struct imx_ldb *ldb = imx_ldb_ch->ldb;
