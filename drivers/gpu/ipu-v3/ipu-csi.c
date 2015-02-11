@@ -422,7 +422,7 @@ int ipu_csi_init_interface(struct ipu_csi *csi,
 
 			ipu_csi_write(csi, 0xD07DF | CSI_CCIR_ERR_DET_EN,
 					  CSI_CCIR_CODE_1);
-			ipu_csi_write(csi, 0x40596, CSI_CCIR_CODE_2);
+			ipu_csi_write(csi, 0x405A6, CSI_CCIR_CODE_2);
 			ipu_csi_write(csi, 0xFF0000, CSI_CCIR_CODE_3);
 		} else {
 			dev_err(csi->ipu->dev,
