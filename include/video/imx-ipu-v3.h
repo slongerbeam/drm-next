@@ -63,16 +63,24 @@ enum ipu_csi_dest {
 /*
  * Enumeration of IPU rotation modes
  */
+#define IPU_ROT_BIT_VFLIP (1 << 0)
+#define IPU_ROT_BIT_HFLIP (1 << 1)
+#define IPU_ROT_BIT_90    (1 << 2)
+
 enum ipu_rotate_mode {
 	IPU_ROTATE_NONE = 0,
-	IPU_ROTATE_VERT_FLIP,
-	IPU_ROTATE_HORIZ_FLIP,
-	IPU_ROTATE_180,
-	IPU_ROTATE_90_RIGHT,
-	IPU_ROTATE_90_RIGHT_VFLIP,
-	IPU_ROTATE_90_RIGHT_HFLIP,
-	IPU_ROTATE_90_LEFT,
+	IPU_ROTATE_VERT_FLIP = IPU_ROT_BIT_VFLIP,
+	IPU_ROTATE_HORIZ_FLIP = IPU_ROT_BIT_HFLIP,
+	IPU_ROTATE_180 = (IPU_ROT_BIT_VFLIP | IPU_ROT_BIT_HFLIP),
+	IPU_ROTATE_90_RIGHT = IPU_ROT_BIT_90,
+	IPU_ROTATE_90_RIGHT_VFLIP = (IPU_ROT_BIT_90 | IPU_ROT_BIT_VFLIP),
+	IPU_ROTATE_90_RIGHT_HFLIP = (IPU_ROT_BIT_90 | IPU_ROT_BIT_HFLIP),
+	IPU_ROTATE_90_LEFT = (IPU_ROT_BIT_90 |
+			      IPU_ROT_BIT_VFLIP | IPU_ROT_BIT_HFLIP),
 };
+
+/* 90-degree rotations require the IRT unit */
+#define ipu_rot_mode_is_irt(m) ((m) >= IPU_ROTATE_90_RIGHT)
 
 enum ipu_color_space {
 	IPUV3_COLORSPACE_RGB,
@@ -337,6 +345,7 @@ enum ipu_ic_task {
 };
 
 struct ipu_ic;
+
 int ipu_ic_task_init(struct ipu_ic *ic,
 		     int in_width, int in_height,
 		     int out_width, int out_height,
@@ -351,6 +360,40 @@ void ipu_ic_task_disable(struct ipu_ic *ic);
 int ipu_ic_task_idma_init(struct ipu_ic *ic, struct ipuv3_channel *channel,
 			  u32 width, u32 height, int burst_size,
 			  enum ipu_rotate_mode rot);
+
+struct image_converter_ctx;
+struct image_converter_run;
+
+typedef void (*image_converter_cb_t)(void *ctx,
+				     struct image_converter_run *run,
+				     int err);
+
+int ipu_image_convert_enum_format(int index, const char **desc, u32 *fourcc);
+int ipu_image_convert_adjust(struct ipu_image *in, struct ipu_image *out,
+			     enum ipu_rotate_mode rot_mode);
+int ipu_image_convert_verify(struct ipu_image *in, struct ipu_image *out,
+			     enum ipu_rotate_mode rot_mode);
+struct image_converter_ctx *
+ipu_image_convert_prepare(struct ipu_ic *ic,
+			  struct ipu_image *in, struct ipu_image *out,
+			  enum ipu_rotate_mode rot_mode,
+			  image_converter_cb_t complete,
+			  void *complete_context);
+void ipu_image_convert_unprepare(struct image_converter_ctx *ctx);
+struct image_converter_run *
+ipu_image_convert_run(struct image_converter_ctx *ctx,
+		      dma_addr_t in_phys, dma_addr_t out_phys);
+void ipu_image_convert_abort(struct image_converter_ctx *ctx);
+struct image_converter_ctx *
+ipu_image_convert(struct ipu_ic *ic,
+		  struct ipu_image *in, struct ipu_image *out,
+		  enum ipu_rotate_mode rot_mode,
+		  image_converter_cb_t complete,
+		  void *complete_context);
+int ipu_image_convert_sync(struct ipu_ic *ic,
+			   struct ipu_image *in, struct ipu_image *out,
+			   enum ipu_rotate_mode rot_mode);
+
 int ipu_ic_enable(struct ipu_ic *ic);
 int ipu_ic_disable(struct ipu_ic *ic);
 struct ipu_ic *ipu_ic_get(struct ipu_soc *ipu, enum ipu_ic_task task);
