@@ -75,6 +75,8 @@ __drm_gem_cma_create(struct drm_device *drm, size_t size)
 		goto error;
 	}
 
+	dma_set_attr(DMA_ATTR_SKIP_CPU_SYNC, &gem_obj->dma_attrs);
+
 	return cma_obj;
 
 error:

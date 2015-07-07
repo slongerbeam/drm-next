@@ -169,6 +169,7 @@ void drm_gem_private_object_init(struct drm_device *dev,
 	obj->handle_count = 0;
 	obj->size = size;
 	drm_vma_node_reset(&obj->vma_node);
+	init_dma_attrs(&obj->dma_attrs);
 }
 EXPORT_SYMBOL(drm_gem_private_object_init);
 

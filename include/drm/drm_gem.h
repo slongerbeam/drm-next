@@ -104,6 +104,11 @@ struct drm_gem_object {
 	struct dma_buf *dma_buf;
 
 	/**
+	 * dma_attrs - DMA attributes for this GEM object
+	 */
+	struct dma_attrs dma_attrs;
+
+	/**
 	 * import_attach - dma buf attachment backing this object
 	 *
 	 * Any foreign dma_buf imported as a gem object has this set to the
