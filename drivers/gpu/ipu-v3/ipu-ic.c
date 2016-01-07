@@ -338,7 +338,6 @@ struct ipu_ic {
 	enum ipu_color_space out_cs;
 	bool graphics;
 	bool rotation;
-	bool in_use;
 
 	struct image_converter cvt;
 
@@ -2370,38 +2369,16 @@ EXPORT_SYMBOL_GPL(ipu_ic_disable);
 struct ipu_ic *ipu_ic_get(struct ipu_soc *ipu, enum ipu_ic_task task)
 {
 	struct ipu_ic_priv *priv = ipu->ic_priv;
-	unsigned long flags;
-	struct ipu_ic *ic, *ret;
 
 	if (task >= IC_NUM_TASKS)
 		return ERR_PTR(-EINVAL);
 
-	ic = &priv->task[task];
-
-	spin_lock_irqsave(&priv->lock, flags);
-
-	if (ic->in_use) {
-		ret = ERR_PTR(-EBUSY);
-		goto unlock;
-	}
-
-	ic->in_use = true;
-	ret = ic;
-
-unlock:
-	spin_unlock_irqrestore(&priv->lock, flags);
-	return ret;
+	return &priv->task[task];
 }
 EXPORT_SYMBOL_GPL(ipu_ic_get);
 
 void ipu_ic_put(struct ipu_ic *ic)
 {
-	struct ipu_ic_priv *priv = ic->priv;
-	unsigned long flags;
-
-	spin_lock_irqsave(&priv->lock, flags);
-	ic->in_use = false;
-	spin_unlock_irqrestore(&priv->lock, flags);
 }
 EXPORT_SYMBOL_GPL(ipu_ic_put);
 
