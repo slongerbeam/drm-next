@@ -1161,18 +1161,77 @@ static struct ipu_platform_reg client_reg[] = {
 		.pdata = {
 			.type = IPU_CSI,
 			.csi = 0,
-			.dma[0] = IPUV3_CHANNEL_CSI0,
-			.dma[1] = -EINVAL,
+			.dma[0] = -EINVAL,
 		},
 		.name = "imx-ipuv3-csi",
 	}, {
 		.pdata = {
 			.type = IPU_CSI,
 			.csi = 1,
+			.dma[0] = -EINVAL,
+		},
+		.name = "imx-ipuv3-csi",
+	}, {
+		.pdata = {
+			.type = IPU_SMFC,
+			.smfc = 0,
+			.dma[0] = IPUV3_CHANNEL_CSI0,
+			.dma[1] = -EINVAL,
+		},
+		.name = "imx-ipuv3-smfc",
+	}, {
+		.pdata = {
+			.type = IPU_SMFC,
+			.smfc = 1,
 			.dma[0] = IPUV3_CHANNEL_CSI1,
 			.dma[1] = -EINVAL,
 		},
-		.name = "imx-ipuv3-csi",
+		.name = "imx-ipuv3-smfc",
+	}, {
+		.pdata = {
+			.type = IPU_IC,
+			.ic_task = IC_TASK_ENCODER,
+			.ic = 0,
+			.dma[0] = IPUV3_CHANNEL_IC_PRP_ENC_MEM,
+			.dma[1] = -EINVAL,
+		},
+		.name = "imx-ipuv3-ic",
+	}, {
+		.pdata = {
+			.type = IPU_IC,
+			.ic_task = IC_TASK_VIEWFINDER,
+			.ic = 0,
+			.dma[0] = IPUV3_CHANNEL_IC_PRP_VF_MEM,
+			.dma[1] = -EINVAL,
+		},
+		.name = "imx-ipuv3-ic",
+	}, {
+		.pdata = {
+			.type = IPU_IC,
+			.ic_task = IC_TASK_POST_PROCESSOR,
+			.ic = 0,
+			.dma[0] = IPUV3_CHANNEL_IC_PP_MEM,
+			.dma[1] = -EINVAL,
+		},
+		.name = "imx-ipuv3-ic",
+	}, {
+		.pdata = {
+			.type = IPU_IC,
+			.ic_task = IC_TASK_POST_PROCESSOR,
+			.ic = 1,
+			.dma[0] = IPUV3_CHANNEL_IC_PP_MEM,
+			.dma[1] = -EINVAL,
+		},
+		.name = "imx-ipuv3-ic",
+	}, {
+		.pdata = {
+			.type = IPU_IC,
+			.ic_task = IC_TASK_POST_PROCESSOR,
+			.ic = 2,
+			.dma[0] = IPUV3_CHANNEL_IC_PP_MEM,
+			.dma[1] = -EINVAL,
+		},
+		.name = "imx-ipuv3-ic",
 	}, {
 		.pdata = {
 			.type = IPU_DI,
@@ -1212,6 +1271,28 @@ of_get_ipu_client_node(struct ipu_soc *ipu, struct ipu_platform_reg *reg)
 		snprintf(node_name, sizeof(node_name),
 			 "ipu%d_csi", ipu->id + 1);
 		client_id = reg->pdata.csi;
+		break;
+	case IPU_SMFC:
+		snprintf(node_name, sizeof(node_name), "ipu%d_smfc",
+			 ipu->id + 1);
+		client_id = reg->pdata.smfc;
+		break;
+	case IPU_IC:
+		switch (reg->pdata.ic_task) {
+		case IC_TASK_ENCODER:
+			snprintf(node_name, sizeof(node_name),
+				 "ipu%d_ic_prpenc", ipu->id + 1);
+			break;
+		case IC_TASK_VIEWFINDER:
+			snprintf(node_name, sizeof(node_name),
+				 "ipu%d_ic_prpvf", ipu->id + 1);
+			break;
+		case IC_TASK_POST_PROCESSOR:
+			snprintf(node_name, sizeof(node_name),
+				 "ipu%d_ic_pp", ipu->id + 1);
+			break;
+		}
+		client_id = reg->pdata.ic;
 		break;
 	case IPU_DI:
 		snprintf(node_name, sizeof(node_name),
