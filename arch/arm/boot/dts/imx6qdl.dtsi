@@ -1226,18 +1226,18 @@
 			clock-names = "bus", "di0", "di1";
 			resets = <&src 2>;
 
-			ipu1_csi0: port@0 {
+			ipu1_csi0: ipu1_csi@0 {
 				reg = <0>;
 			};
 
-			ipu1_csi1: port@1 {
+			ipu1_csi1: ipu1_csi@1 {
 				reg = <1>;
 			};
 
-			ipu1_di0: port@2 {
+			ipu1_di0: ipu1_di@0 {
 				#address-cells = <1>;
 				#size-cells = <0>;
-				reg = <2>;
+				reg = <0>;
 
 				ipu1_di0_disp0: disp0-endpoint {
 				};
@@ -1259,10 +1259,10 @@
 				};
 			};
 
-			ipu1_di1: port@3 {
+			ipu1_di1: ipu1_di@1 {
 				#address-cells = <1>;
 				#size-cells = <0>;
-				reg = <3>;
+				reg = <1>;
 
 				ipu1_di1_disp1: disp1-endpoint {
 				};

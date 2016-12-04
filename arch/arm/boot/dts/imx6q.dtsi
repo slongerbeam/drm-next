@@ -141,18 +141,18 @@
 			clock-names = "bus", "di0", "di1";
 			resets = <&src 4>;
 
-			ipu2_csi0: port@0 {
+			ipu2_csi0: ipu2_csi@0 {
 				reg = <0>;
 			};
 
-			ipu2_csi1: port@1 {
+			ipu2_csi1: ipu2_csi@1 {
 				reg = <1>;
 			};
 
-			ipu2_di0: port@2 {
+			ipu2_di0: ipu2_di@0 {
 				#address-cells = <1>;
 				#size-cells = <0>;
-				reg = <2>;
+				reg = <0>;
 
 				ipu2_di0_disp0: disp0-endpoint {
 				};
@@ -174,10 +174,10 @@
 				};
 			};
 
-			ipu2_di1: port@3 {
+			ipu2_di1: ipu2_di@1 {
 				#address-cells = <1>;
 				#size-cells = <0>;
-				reg = <3>;
+				reg = <1>;
 
 				ipu2_di1_hdmi: hdmi-endpoint {
 					remote-endpoint = <&hdmi_mux_3>;
