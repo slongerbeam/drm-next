@@ -28,6 +28,23 @@ enum ipuv3_type {
 	IPUV3H,
 };
 
+/*
+ * Enumeration of the major IPU subunits
+ */
+enum ipu_unit_type {
+	IPU_IDMAC = 0,
+	IPU_CM,
+	IPU_CSI,
+	IPU_SMFC,
+	IPU_IC,
+	IPU_VDI,
+	IPU_IRT,
+	IPU_DC,
+	IPU_DI,
+	IPU_DP,
+	IPU_DMFC,
+};
+
 #define IPU_PIX_FMT_GBR24	v4l2_fourcc('G', 'B', 'R', '3')
 
 /*
@@ -399,6 +416,7 @@ int ipu_rot_mode_to_degrees(int *degrees, enum ipu_rotate_mode mode,
 			    bool hflip, bool vflip);
 
 struct ipu_client_platformdata {
+	enum ipu_unit_type type;
 	int csi;
 	int di;
 	int dc;
