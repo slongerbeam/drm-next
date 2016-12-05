@@ -1159,6 +1159,7 @@ struct ipu_platform_reg {
 static struct ipu_platform_reg client_reg[] = {
 	{
 		.pdata = {
+			.type = IPU_CSI,
 			.csi = 0,
 			.dma[0] = IPUV3_CHANNEL_CSI0,
 			.dma[1] = -EINVAL,
@@ -1166,6 +1167,7 @@ static struct ipu_platform_reg client_reg[] = {
 		.name = "imx-ipuv3-csi",
 	}, {
 		.pdata = {
+			.type = IPU_CSI,
 			.csi = 1,
 			.dma[0] = IPUV3_CHANNEL_CSI1,
 			.dma[1] = -EINVAL,
@@ -1173,6 +1175,7 @@ static struct ipu_platform_reg client_reg[] = {
 		.name = "imx-ipuv3-csi",
 	}, {
 		.pdata = {
+			.type = IPU_DI,
 			.di = 0,
 			.dc = 5,
 			.dp = IPU_DP_FLOW_SYNC_BG,
@@ -1182,6 +1185,7 @@ static struct ipu_platform_reg client_reg[] = {
 		.name = "imx-ipuv3-crtc",
 	}, {
 		.pdata = {
+			.type = IPU_DI,
 			.di = 1,
 			.dc = 1,
 			.dp = -EINVAL,
@@ -1194,6 +1198,46 @@ static struct ipu_platform_reg client_reg[] = {
 
 static DEFINE_MUTEX(ipu_client_id_mutex);
 static int ipu_client_id;
+
+static struct device_node *
+of_get_ipu_client_node(struct ipu_soc *ipu, struct ipu_platform_reg *reg)
+{
+	struct device *dev = ipu->dev;
+	struct device_node *client;
+	char node_name[32];
+	u32 id, client_id = 0;
+
+	switch (reg->pdata.type) {
+	case IPU_CSI:
+		snprintf(node_name, sizeof(node_name),
+			 "ipu%d_csi", ipu->id + 1);
+		client_id = reg->pdata.csi;
+		break;
+	case IPU_DI:
+		snprintf(node_name, sizeof(node_name),
+			 "ipu%d_di", ipu->id + 1);
+		client_id = reg->pdata.di;
+		break;
+	default:
+		client = NULL;
+		goto out;
+	}
+
+	for_each_child_of_node(dev->of_node, client) {
+		if (client->name &&
+		    (of_node_cmp(client->name, node_name) == 0)) {
+			of_property_read_u32(client, "reg", &id);
+			if (id == client_id)
+				break;
+		}
+	}
+out:
+	if (!client)
+		dev_info(dev, "no %s%d node in %s, not using %s%d\n",
+			 node_name, client_id, dev->of_node->full_name,
+			 node_name, client_id);
+	return client;
+}
 
 static int ipu_add_client_devices(struct ipu_soc *ipu, unsigned long ipu_base)
 {
@@ -1211,15 +1255,10 @@ static int ipu_add_client_devices(struct ipu_soc *ipu, unsigned long ipu_base)
 		struct platform_device *pdev;
 		struct device_node *of_node;
 
-		/* Associate subdevice with the corresponding port node */
-		of_node = of_graph_get_port_by_id(dev->of_node, i);
-		if (!of_node) {
-			dev_info(dev,
-				 "no port@%d node in %s, not using %s%d\n",
-				 i, dev->of_node->full_name,
-				 (i / 2) ? "DI" : "CSI", i % 2);
+		/* Associate subdevice with the corresponding client node */
+		of_node = of_get_ipu_client_node(ipu, reg);
+		if (!of_node)
 			continue;
-		}
 
 		pdev = platform_device_alloc(reg->name, id++);
 		if (!pdev) {
